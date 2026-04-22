@@ -2,5 +2,6 @@
   "name": "Energy Flow Card",
   "content_in_root": true,
   "zip_release": true,
-  "filename": "energy-flow-card.zip"
+  "filename": "energy-flow-card.zip",
+  "render_readme": true
 }
