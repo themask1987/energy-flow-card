@@ -1,9 +1,9 @@
 // =============================================================================
-// ENERGY FLOW CARD — energy-flow-card.js  v1.0.0
+// ENERGY FLOW CARD — energy-flow-card.js  v1.1.0
 // Repository: github.com/themask1987/energy-flow-card
 // =============================================================================
 
-const CARD_VERSION = '1.0.0';
+const CARD_VERSION = '1.1.0';
 
 const VB = { w: 700, h: 760 };
 
@@ -49,11 +49,11 @@ function resolveAppearance(cfg) {
     lineWidth           : parseFloat(a.line_width)            || 2.5,
     lineOpacityInactive : parseFloat(a.line_opacity_inactive) || 0.15,
     flowThreshold       : parseInt(a.flow_threshold)          || 10,
-    fontNodeLabel       : parseInt(a.font_node_label)         || 19,  // era 22, -3
-    fontNodeValue       : parseInt(a.font_node_value)         || 31,  // era 34, -3
-    fontNodeSecondary   : parseInt(a.font_node_secondary)     || 15,  // era 18, -3
-    fontSecLabel        : parseInt(a.font_secondary_label)    || 14,  // era 17, -3
-    fontSecValue        : parseInt(a.font_secondary_value)    || 19,  // era 22, -3
+    fontNodeLabel       : parseInt(a.font_node_label)         || 19,
+    fontNodeValue       : parseInt(a.font_node_value)         || 31,
+    fontNodeSecondary   : parseInt(a.font_node_secondary)     || 15,
+    fontSecLabel        : parseInt(a.font_secondary_label)    || 14,
+    fontSecValue        : parseInt(a.font_secondary_value)    || 19,
   };
 }
 
@@ -361,7 +361,6 @@ ${buildCSS(app)}
   <svg class="efc-svg" viewBox="0 0 ${VB.w} ${VB.h}" xmlns="http://www.w3.org/2000/svg">
     ${buildDefs(app, cols)}
 
-    <!-- STRINGHE -->
     ${vis.showStrings ? strSlotMap.map((str, si) =>
       str ? drawStringLine(si, r, cols.solar, app) : ''
     ).join('') : ''}
@@ -371,39 +370,30 @@ ${buildCSS(app)}
       }) : ''
     ).join('') : ''}
 
-    <!-- CONNETTORI PRINCIPALI -->
     ${drawConnector(pathSolarBattery, cols.solar.stroke,   app)}
     ${drawConnector(pathSolarHome,    cols.solar.stroke,   app)}
     ${vis.showGrid    ? drawConnector(pathSolarGrid,   cols.solar.stroke,   app) : ''}
     ${vis.showBattery ? drawConnector(pathBatteryHome, cols.battery.stroke, app) : ''}
     ${vis.showGrid    ? drawConnector(pathGridHome,    cols.grid.stroke,    app) : ''}
 
-    <!-- LINEE CARICHI -->
     ${vis.showLoads ? loadSlotMap.map((load, li) =>
       load ? drawLoadLine(li, load.color || '#26C6DA', true, r, app) : ''
     ).join('') : ''}
 
-    <!-- PALLINI FLUSSO -->
     <g id="efc-dots"></g>
 
-    <!-- NODO SOLARE -->
     ${drawMainNode('solar', POS.solar, r, cols.solar, 'efc-gs', '☀ Solare', 'efc-v-solar1', 'efc-v-solar2', app)}
 
-    <!-- NODO BATTERIA -->
     ${vis.showBattery ? drawMainNode('battery', POS.battery, r, cols.battery, 'efc-gb', '🔋 Batteria', 'efc-v-battery1', 'efc-v-battery2', app) : ''}
 
-    <!-- NODO RETE -->
     ${vis.showGrid ? drawMainNode('grid', POS.grid, r, cols.grid, 'efc-gg', '⚡ Rete', 'efc-v-grid1', 'efc-v-grid2', app) : ''}
 
-    <!-- NODO CASA -->
     ${drawMainNode('home', POS.home, r, cols.home, 'efc-gh', '🏠 Casa', 'efc-v-home1', 'efc-v-home2', app)}
 
-    <!-- CARICHI -->
     ${vis.showLoads ? loadSlotMap.map((load, li) =>
       load ? drawLoadBox(li, load.name || `CR${li+1}`, load.color, `efc-v-load${li}`, true, app, { stroke: '#26C6DA', fill: '#001a1a' }) : ''
     ).join('') : ''}
 
-    <!-- PULSANTE TOGGLE -->
     ${vis.showHistoryBtn ? `
     <g class="efc-mode-btn" onclick="this.getRootNode().host._toggleMode()"
       transform="translate(${(VB.w - 180) / 2}, ${btnY})">
@@ -445,7 +435,7 @@ ${buildCSS(app)}
     const solarW = mode === 'realtime'
       ? gW(cfg.solar?.entity_power, cfg.solar?.unit)
       : gR(cfg.solar?.entity_energy);
-    this._t('efc-v-solar1', mode === 'realtime' ? fmtW(solarW) : fmtE(solarW));
+    this._t('efc-v-solar1', mode === 'realtime' ? fmtW(solarW) : fmtE(solarW), mode, app.fontNodeValue);
 
     // Stringhe
     if (vis.showStrings) {
@@ -468,8 +458,13 @@ ${buildCSS(app)}
     if (vis.showGrid) {
       gridIn  = mode === 'realtime' ? gW(cfg.grid?.entity_import)  : gR(cfg.grid?.entity_import_energy);
       gridOut = mode === 'realtime' ? gW(cfg.grid?.entity_export)  : gR(cfg.grid?.entity_export_energy);
-      this._t('efc-v-grid1', `→ ${mode === 'realtime' ? fmtW(gridIn)  : fmtE(gridIn)}`);
-      this._t('efc-v-grid2', `← ${mode === 'realtime' ? fmtW(gridOut) : fmtE(gridOut)}`);
+      
+      const valIn  = mode === 'realtime' ? fmtW(gridIn)  : fmtE(gridIn);
+      const valOut = mode === 'realtime' ? fmtW(gridOut) : fmtE(gridOut);
+      
+      // Aggiungo il tspan per ridurre del 35% la grandezza della freccia rispetto al testo
+      this._t('efc-v-grid1', `<tspan font-size="0.65em">→ </tspan>${valIn}`, mode, app.fontNodeValue);
+      this._t('efc-v-grid2', `<tspan font-size="0.65em">← </tspan>${valOut}`, mode, app.fontNodeSecondary);
       this._setOpacity('efc-nd-grid', true, app.lineOpacityInactive);
     }
 
@@ -482,22 +477,37 @@ ${buildCSS(app)}
       if (batD !== null && batD !== undefined) batW = (batC || 0) - (batD || 0);
 
       if (mode === 'realtime') {
-        // kW carica (riga1) / kW scarica (riga2)
-        this._t('efc-v-battery1', batC !== null ? fmtW(batC) : '—');
-        this._t('efc-v-battery2', batD !== null ? fmtW(batD) : '—');
+        // Valore primario (riga 1): Percentuale batteria (SOC)
+        const batSoc = gR(cfg.battery?.entity_soc);
+        const socStr = batSoc !== null ? `${Math.round(batSoc)} %` : '—';
+        this._t('efc-v-battery1', socStr, mode, app.fontNodeValue);
+
+        // Valore secondario (riga 2): Flusso con frecce direzionali
+        let batSecStr = fmtW(0); // Default: 0 senza freccia
+        if (batW > 0) {
+          // In carica
+          batSecStr = `<tspan font-size="1.0em">↑ </tspan>${fmtW(batW)}`;
+        } else if (batW < 0) {
+          // In scarica (uso Math.abs per togliere il segno meno davanti al numero)
+          batSecStr = `<tspan font-size="1.0em">↓ </tspan>${fmtW(Math.abs(batW))}`;
+        }
+        
+        // Applica l'aumento di font di 4px (Metodo 1) e il ridimensionamento dinamico
+        this._t('efc-v-battery2', batSecStr, mode, app.fontNodeSecondary + 4);
+        
       } else {
         // Storico: energia carica / scarica in kWh
         const batEIn  = gR(cfg.battery?.entity_energy_in);
         const batEOut = gR(cfg.battery?.entity_energy_out);
-        this._t('efc-v-battery1', fmtE(batEIn));
-        this._t('efc-v-battery2', fmtE(batEOut));
+        this._t('efc-v-battery1', fmtE(batEIn), mode, app.fontNodeValue);
+        this._t('efc-v-battery2', fmtE(batEOut), mode, app.fontNodeSecondary);
       }
       this._setOpacity('efc-nd-battery', true, app.lineOpacityInactive);
     }
 
     // CASA
     const homeW = mode === 'realtime' ? gW(cfg.home?.entity_power) : gR(cfg.home?.entity_energy);
-    this._t('efc-v-home1', mode === 'realtime' ? fmtW(homeW) : fmtE(homeW));
+    this._t('efc-v-home1', mode === 'realtime' ? fmtW(homeW) : fmtE(homeW), mode, app.fontNodeValue);
 
     // Carichi
     if (vis.showLoads) {
@@ -519,9 +529,26 @@ ${buildCSS(app)}
     this._updateDots({ solarW, gridIn, gridOut, batW });
   }
 
-  _t(id, val) {
+  _t(id, val, dynMode = null, baseSize = null) {
     const el = this.shadowRoot.getElementById(id);
-    if (el && val !== undefined) el.textContent = val;
+    if (!el || val === undefined) return;
+    
+    // Usiamo innerHTML per permettere il rendering di tag SVG (es. <tspan> per le frecce)
+    el.innerHTML = val;
+
+    if (baseSize) {
+      // Rimuove i tag HTML per misurare la lunghezza della stringa pulita
+      const plainText = String(val).replace(/<[^>]*>?/gm, '').trim();
+      const len = plainText.length;
+      let scale = 1.0;
+
+      // Ridimensionamento dinamico in base al numero di caratteri (applicato sempre)
+      if (len >= 10) scale = 0.70;       // Es. "1234.5 kWh" o "1200.5 W"
+      else if (len >= 9) scale = 0.80;   
+      else if (len >= 8) scale = 0.90;   
+
+      el.setAttribute('font-size', Math.round(baseSize * scale));
+    }
   }
 
   _setOpacity(id, active, inactiveOp) {
@@ -598,17 +625,17 @@ ${buildCSS(app)}
     return {
       view_mode: 'realtime',
       solar: {
-        entity_power: 'sensor.solar_power',
+        entity_power: 'sensor.sun2000_pv_prod_tot',
         unit: 'kW',
         strings: [
-          { name: 'Str 1', entity_power: 'sensor.solar_string_1_power', unit: 'kW' },
-          { name: 'Str 2', entity_power: 'sensor.solar_string_2_power', unit: 'kW' },
+          { name: 'Str 1', entity_power: 'sensor.sun2000_pv_string_01_power', unit: 'kW' },
+          { name: 'Str 2', entity_power: 'sensor.sun2000_pv_string_02_power', unit: 'kW' },
         ],
       },
-      grid    : { entity_import: 'sensor.grid_import_power', entity_export: 'sensor.grid_export_power' },
-      battery : { entity_power: 'sensor.battery_charge_power', entity_discharge: 'sensor.battery_discharge_power', entity_soc: 'sensor.battery_soc' },
-      home    : { entity_power: 'sensor.home_power', loads: [
-        { name: 'Load 1', entity_power: 'sensor.load_1_power' },
+      grid    : { entity_import: 'sensor.sun2000_buy_power', entity_export: 'sensor.sun2000_sell_power' },
+      battery : { entity_power: 'sensor.sun2000_bat_charge', entity_discharge: 'sensor.sun2000_bat_discharge', entity_soc: 'sensor.battery_state_of_capacity' },
+      home    : { entity_power: 'sensor.generale_power', loads: [
+        { name: 'Wallbox', entity_power: 'sensor.wallbox_portal_charging_power', color: '#F9A825' },
       ]},
     };
   }
@@ -814,9 +841,9 @@ class EnergyFlowCardEditor extends LitElement {
       <div class="editor">
 
         ${this._section('solar', '☀️', 'Solare', html`
-          ${this._entityField('Potenza',         'solar.entity_power',  'sensor.solar_power')}
+          ${this._entityField('Potenza',         'solar.entity_power',  'sensor.sun2000_pv_prod_tot')}
           ${this._txt('Unità (kW / W / auto)',   'solar.unit',          'kW')}
-          ${this._entityField('Energia storico', 'solar.entity_energy', 'sensor.solar_energy_today')}
+          ${this._entityField('Energia storico', 'solar.entity_energy', 'sensor.sun2000_daily_yield')}
 
           <div class="sec-sub">Stringa 1</div>
           ${this._entityField('Potenza Str 1', 'solar.strings.0.entity_power', '')}
@@ -840,22 +867,22 @@ class EnergyFlowCardEditor extends LitElement {
         `)}
 
         ${this._section('grid', '⚡', 'Rete', html`
-          ${this._entityField('Prelievo (W)',               'grid.entity_import',        'sensor.grid_import_power')}
-          ${this._entityField('Immissione (W)',             'grid.entity_export',        'sensor.grid_export_power')}
+          ${this._entityField('Prelievo (W)',               'grid.entity_import',        'sensor.sun2000_buy_power')}
+          ${this._entityField('Immissione (W)',             'grid.entity_export',        'sensor.sun2000_sell_power')}
           ${this._entityField('Energia prelievo storico',   'grid.entity_import_energy', '')}
           ${this._entityField('Energia immissione storico', 'grid.entity_export_energy', '')}
         `)}
 
         ${this._section('battery', '🔋', 'Batteria', html`
-          ${this._entityField('Carica (W)',             'battery.entity_power',      'sensor.battery_charge_power')}
-          ${this._entityField('Scarica (W, separato)',  'battery.entity_discharge',  'sensor.battery_discharge_power')}
-          ${this._entityField('SOC (%)',                'battery.entity_soc',        'sensor.battery_soc')}
+          ${this._entityField('Carica (W)',             'battery.entity_power',      'sensor.sun2000_bat_charge')}
+          ${this._entityField('Scarica (W, separato)',  'battery.entity_discharge',  'sensor.sun2000_bat_discharge')}
+          ${this._entityField('SOC (%)',                'battery.entity_soc',        'sensor.battery_state_of_capacity')}
           ${this._entityField('Energia carica storico',  'battery.entity_energy_in',  '')}
           ${this._entityField('Energia scarica storico', 'battery.entity_energy_out', '')}
         `)}
 
         ${this._section('home', '🏠', 'Casa', html`
-          ${this._entityField('Potenza totale (W)', 'home.entity_power',  'sensor.home_power')}
+          ${this._entityField('Potenza totale (W)', 'home.entity_power',  'sensor.generale_power')}
           ${this._entityField('Energia storico',    'home.entity_energy', '')}
 
           <div class="sec-sub">Carico 1</div>
