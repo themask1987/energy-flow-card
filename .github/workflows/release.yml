@@ -1,0 +1,19 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create release zip
+        run: zip -r energy-flow-card.zip energy-flow-card.js hacs.json
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: energy-flow-card.zip
