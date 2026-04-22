@@ -1,3 +1,6 @@
 {
-  "name": "Energy Flow Card"
+  "name": "Energy Flow Card",
+  "content_in_root": true,
+  "zip_release": true,
+  "filename": "energy-flow-card.js"
 }
