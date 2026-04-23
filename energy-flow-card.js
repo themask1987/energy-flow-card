@@ -1,9 +1,9 @@
 // =============================================================================
-// ENERGY FLOW CARD — energy-flow-card.js  v1.1.0
+// ENERGY FLOW CARD — energy-flow-card.js  v1.2.0
 // Repository: github.com/themask1987/energy-flow-card
 // =============================================================================
 
-const CARD_VERSION = '1.1.0';
+const CARD_VERSION = '1.2.0';
 
 const VB = { w: 700, h: 760 };
 
@@ -124,7 +124,7 @@ function flowDur(w, app) {
   return dur.toFixed(2);
 }
 
-function isActive(w, thr) { return w !== null && Math.abs(w) > thr; }
+function isActive(w, thr) { return w !== null && !isNaN(w) && Math.abs(w) > thr; }
 
 // =============================================================================
 // SVG generators
@@ -361,6 +361,7 @@ ${buildCSS(app)}
   <svg class="efc-svg" viewBox="0 0 ${VB.w} ${VB.h}" xmlns="http://www.w3.org/2000/svg">
     ${buildDefs(app, cols)}
 
+    <!-- STRINGHE -->
     ${vis.showStrings ? strSlotMap.map((str, si) =>
       str ? drawStringLine(si, r, cols.solar, app) : ''
     ).join('') : ''}
@@ -370,30 +371,39 @@ ${buildCSS(app)}
       }) : ''
     ).join('') : ''}
 
+    <!-- CONNETTORI PRINCIPALI -->
     ${drawConnector(pathSolarBattery, cols.solar.stroke,   app)}
     ${drawConnector(pathSolarHome,    cols.solar.stroke,   app)}
     ${vis.showGrid    ? drawConnector(pathSolarGrid,   cols.solar.stroke,   app) : ''}
     ${vis.showBattery ? drawConnector(pathBatteryHome, cols.battery.stroke, app) : ''}
     ${vis.showGrid    ? drawConnector(pathGridHome,    cols.grid.stroke,    app) : ''}
 
+    <!-- LINEE CARICHI -->
     ${vis.showLoads ? loadSlotMap.map((load, li) =>
       load ? drawLoadLine(li, load.color || '#26C6DA', true, r, app) : ''
     ).join('') : ''}
 
+    <!-- PALLINI FLUSSO -->
     <g id="efc-dots"></g>
 
+    <!-- NODO SOLARE -->
     ${drawMainNode('solar', POS.solar, r, cols.solar, 'efc-gs', '☀ Solare', 'efc-v-solar1', 'efc-v-solar2', app)}
 
+    <!-- NODO BATTERIA -->
     ${vis.showBattery ? drawMainNode('battery', POS.battery, r, cols.battery, 'efc-gb', '🔋 Batteria', 'efc-v-battery1', 'efc-v-battery2', app) : ''}
 
+    <!-- NODO RETE -->
     ${vis.showGrid ? drawMainNode('grid', POS.grid, r, cols.grid, 'efc-gg', '⚡ Rete', 'efc-v-grid1', 'efc-v-grid2', app) : ''}
 
+    <!-- NODO CASA -->
     ${drawMainNode('home', POS.home, r, cols.home, 'efc-gh', '🏠 Casa', 'efc-v-home1', 'efc-v-home2', app)}
 
+    <!-- CARICHI -->
     ${vis.showLoads ? loadSlotMap.map((load, li) =>
       load ? drawLoadBox(li, load.name || `CR${li+1}`, load.color, `efc-v-load${li}`, true, app, { stroke: '#26C6DA', fill: '#001a1a' }) : ''
     ).join('') : ''}
 
+    <!-- PULSANTE TOGGLE -->
     ${vis.showHistoryBtn ? `
     <g class="efc-mode-btn" onclick="this.getRootNode().host._toggleMode()"
       transform="translate(${(VB.w - 180) / 2}, ${btnY})">
@@ -435,7 +445,9 @@ ${buildCSS(app)}
     const solarW = mode === 'realtime'
       ? gW(cfg.solar?.entity_power, cfg.solar?.unit)
       : gR(cfg.solar?.entity_energy);
-    this._t('efc-v-solar1', mode === 'realtime' ? fmtW(solarW) : fmtE(solarW), mode, app.fontNodeValue);
+    const solarActive = isActive(solarW, thr);
+    this._t('efc-v-solar1', mode === 'realtime' ? fmtW(solarW) : fmtE(solarW), app.fontNodeValue);
+    this._setOpacity('efc-nd-solar', solarActive, app.lineOpacityInactive);
 
     // Stringhe
     if (vis.showStrings) {
@@ -458,14 +470,15 @@ ${buildCSS(app)}
     if (vis.showGrid) {
       gridIn  = mode === 'realtime' ? gW(cfg.grid?.entity_import)  : gR(cfg.grid?.entity_import_energy);
       gridOut = mode === 'realtime' ? gW(cfg.grid?.entity_export)  : gR(cfg.grid?.entity_export_energy);
-      
+
       const valIn  = mode === 'realtime' ? fmtW(gridIn)  : fmtE(gridIn);
       const valOut = mode === 'realtime' ? fmtW(gridOut) : fmtE(gridOut);
-      
-      // Aggiungo il tspan per ridurre del 35% la grandezza della freccia rispetto al testo
-      this._t('efc-v-grid1', `<tspan font-size="0.65em">→ </tspan>${valIn}`, mode, app.fontNodeValue);
-      this._t('efc-v-grid2', `<tspan font-size="0.65em">← </tspan>${valOut}`, mode, app.fontNodeSecondary);
-      this._setOpacity('efc-nd-grid', true, app.lineOpacityInactive);
+
+      this._t('efc-v-grid1', `<tspan font-size="0.65em">→ </tspan>${valIn}`, app.fontNodeValue);
+      this._t('efc-v-grid2', `<tspan font-size="0.65em">← </tspan>${valOut}`, app.fontNodeSecondary);
+
+      const gridActive = isActive(gridIn, thr) || isActive(gridOut, thr);
+      this._setOpacity('efc-nd-grid', gridActive, app.lineOpacityInactive);
     }
 
     // BATTERIA
@@ -477,37 +490,33 @@ ${buildCSS(app)}
       if (batD !== null && batD !== undefined) batW = (batC || 0) - (batD || 0);
 
       if (mode === 'realtime') {
-        // Valore primario (riga 1): Percentuale batteria (SOC)
         const batSoc = gR(cfg.battery?.entity_soc);
         const socStr = batSoc !== null ? `${Math.round(batSoc)} %` : '—';
-        this._t('efc-v-battery1', socStr, mode, app.fontNodeValue);
+        this._t('efc-v-battery1', socStr, app.fontNodeValue);
 
-        // Valore secondario (riga 2): Flusso con frecce direzionali
-        let batSecStr = fmtW(0); // Default: 0 senza freccia
-        if (batW > 0) {
-          // In carica
+        let batSecStr = fmtW(0);
+        if (batW > thr) {
           batSecStr = `<tspan font-size="1.0em">↑ </tspan>${fmtW(batW)}`;
-        } else if (batW < 0) {
-          // In scarica (uso Math.abs per togliere il segno meno davanti al numero)
+        } else if (batW < -thr) {
           batSecStr = `<tspan font-size="1.0em">↓ </tspan>${fmtW(Math.abs(batW))}`;
         }
-        
-        // Applica l'aumento di font di 4px (Metodo 1) e il ridimensionamento dinamico
-        this._t('efc-v-battery2', batSecStr, mode, app.fontNodeSecondary + 4);
-        
+        this._t('efc-v-battery2', batSecStr, app.fontNodeSecondary + 4);
       } else {
-        // Storico: energia carica / scarica in kWh
         const batEIn  = gR(cfg.battery?.entity_energy_in);
         const batEOut = gR(cfg.battery?.entity_energy_out);
-        this._t('efc-v-battery1', fmtE(batEIn), mode, app.fontNodeValue);
-        this._t('efc-v-battery2', fmtE(batEOut), mode, app.fontNodeSecondary);
+        this._t('efc-v-battery1', fmtE(batEIn), app.fontNodeValue);
+        this._t('efc-v-battery2', fmtE(batEOut), app.fontNodeSecondary);
       }
-      this._setOpacity('efc-nd-battery', true, app.lineOpacityInactive);
+
+      const batActive = isActive(batW, thr);
+      this._setOpacity('efc-nd-battery', batActive, app.lineOpacityInactive);
     }
 
     // CASA
     const homeW = mode === 'realtime' ? gW(cfg.home?.entity_power) : gR(cfg.home?.entity_energy);
-    this._t('efc-v-home1', mode === 'realtime' ? fmtW(homeW) : fmtE(homeW), mode, app.fontNodeValue);
+    const homeActive = isActive(homeW, thr);
+    this._t('efc-v-home1', mode === 'realtime' ? fmtW(homeW) : fmtE(homeW), app.fontNodeValue);
+    this._setOpacity('efc-nd-home', homeActive, app.lineOpacityInactive);
 
     // Carichi
     if (vis.showLoads) {
@@ -529,24 +538,20 @@ ${buildCSS(app)}
     this._updateDots({ solarW, gridIn, gridOut, batW });
   }
 
-  _t(id, val, dynMode = null, baseSize = null) {
+  _t(id, val, baseSize = null) {
     const el = this.shadowRoot.getElementById(id);
     if (!el || val === undefined) return;
-    
-    // Usiamo innerHTML per permettere il rendering di tag SVG (es. <tspan> per le frecce)
+
+    // innerHTML per supportare tspan (frecce direzionali)
     el.innerHTML = val;
 
     if (baseSize) {
-      // Rimuove i tag HTML per misurare la lunghezza della stringa pulita
       const plainText = String(val).replace(/<[^>]*>?/gm, '').trim();
       const len = plainText.length;
       let scale = 1.0;
-
-      // Ridimensionamento dinamico in base al numero di caratteri (applicato sempre)
-      if (len >= 10) scale = 0.70;       // Es. "1234.5 kWh" o "1200.5 W"
-      else if (len >= 9) scale = 0.80;   
-      else if (len >= 8) scale = 0.90;   
-
+      if (len >= 10) scale = 0.70;
+      else if (len >= 9) scale = 0.80;
+      else if (len >= 8) scale = 0.90;
       el.setAttribute('font-size', Math.round(baseSize * scale));
     }
   }
@@ -615,6 +620,7 @@ ${buildCSS(app)}
       btn.textContent = mode === 'realtime' ? '⚡ Realtime' : '📊 Storico';
       btn.parentElement.querySelector('rect')?.setAttribute('fill', mode === 'realtime' ? '#1565C0' : '#2a2a2a');
     }
+    this._lastDotSig = null;
     if (this._hass) this._update();
   }
 
@@ -624,19 +630,10 @@ ${buildCSS(app)}
   static getStubConfig() {
     return {
       view_mode: 'realtime',
-      solar: {
-        entity_power: 'sensor.sun2000_pv_prod_tot',
-        unit: 'kW',
-        strings: [
-          { name: 'Str 1', entity_power: 'sensor.sun2000_pv_string_01_power', unit: 'kW' },
-          { name: 'Str 2', entity_power: 'sensor.sun2000_pv_string_02_power', unit: 'kW' },
-        ],
-      },
-      grid    : { entity_import: 'sensor.sun2000_buy_power', entity_export: 'sensor.sun2000_sell_power' },
-      battery : { entity_power: 'sensor.sun2000_bat_charge', entity_discharge: 'sensor.sun2000_bat_discharge', entity_soc: 'sensor.battery_state_of_capacity' },
-      home    : { entity_power: 'sensor.generale_power', loads: [
-        { name: 'Wallbox', entity_power: 'sensor.wallbox_portal_charging_power', color: '#F9A825' },
-      ]},
+      solar   : { entity_power: '', unit: 'kW', entity_energy: '', strings: [] },
+      grid    : { entity_import: '', entity_export: '', entity_import_energy: '', entity_export_energy: '' },
+      battery : { entity_power: '', entity_discharge: '', entity_soc: '', entity_energy_in: '', entity_energy_out: '' },
+      home    : { entity_power: '', entity_energy: '', loads: [] },
     };
   }
 
@@ -656,16 +653,20 @@ const css  = LitElement.prototype.css;
 class EnergyFlowCardEditor extends LitElement {
 
   static get properties() {
-    return { hass: {}, _cfg: {}, _open: {}, _filter: {} };
+    return { hass: {}, _cfg: {}, _open: {}, _subTab: {} };
   }
 
   constructor() {
     super();
     this._cfg    = {};
-    this._filter = {};
+    // Tutte le sezioni chiuse di default
     this._open   = {
-      solar: true, grid: false, battery: false, home: false,
+      solar: false, grid: false, battery: false, home: false,
       appearance: false, display: false,
+    };
+    // Sotto-tab attiva per ogni sezione (realtime | history)
+    this._subTab = {
+      solar: 'realtime', grid: 'realtime', battery: 'realtime', home: 'realtime',
     };
   }
 
@@ -712,8 +713,15 @@ class EnergyFlowCardEditor extends LitElement {
 
   _toggleSection(id) {
     this._open = { ...this._open, [id]: !this._open[id] };
+    this.requestUpdate();
   }
 
+  _setSubTab(section, tab) {
+    this._subTab = { ...this._subTab, [section]: tab };
+    this.requestUpdate();
+  }
+
+  // ── Entity field — pattern animation-card ──────────────────────────────────
   _entityField(label, path, placeholder = '') {
     const val       = this._get(path, '');
     const filterKey = `_ef_${path.replace(/\./g,'_')}`;
@@ -740,9 +748,7 @@ class EnergyFlowCardEditor extends LitElement {
             this._set(path, e.target.value);
             this.requestUpdate();
           }}
-          @change=${e => {
-            this._set(path, e.target.value);
-          }}
+          @change=${e => { this._set(path, e.target.value); }}
         ></ha-textfield>
         ${showDD && matches.length ? html`
           <div class="entity-dropdown">
@@ -759,7 +765,7 @@ class EnergyFlowCardEditor extends LitElement {
                 </div>`;
             })}
           </div>` : ''}
-      </div>`
+      </div>`;
   }
 
   _slider(label, path, min, max, step, def, unit = '') {
@@ -822,6 +828,22 @@ class EnergyFlowCardEditor extends LitElement {
       </div>`;
   }
 
+  // ── Sotto-tab realtime/storico ─────────────────────────────────────────────
+  _subTabs(section, rtContent, histContent) {
+    const active = this._subTab[section] || 'realtime';
+    return html`
+      <div class="subtab-bar">
+        <div class="subtab ${active === 'realtime' ? 'subtab-active' : ''}"
+          @click=${() => this._setSubTab(section, 'realtime')}>⚡ Realtime</div>
+        <div class="subtab ${active === 'history' ? 'subtab-active' : ''}"
+          @click=${() => this._setSubTab(section, 'history')}>📊 Storico</div>
+      </div>
+      <div class="subtab-body">
+        ${active === 'realtime' ? rtContent : histContent}
+      </div>`;
+  }
+
+  // ── Section collassabile ───────────────────────────────────────────────────
   _section(id, icon, title, content) {
     const open = this._open[id];
     return html`
@@ -841,74 +863,107 @@ class EnergyFlowCardEditor extends LitElement {
       <div class="editor">
 
         ${this._section('solar', '☀️', 'Solare', html`
-          ${this._entityField('Potenza',         'solar.entity_power',  'sensor.sun2000_pv_prod_tot')}
-          ${this._txt('Unità (kW / W / auto)',   'solar.unit',          'kW')}
-          ${this._entityField('Energia storico', 'solar.entity_energy', 'sensor.sun2000_daily_yield')}
-
-          <div class="sec-sub">Stringa 1</div>
-          ${this._entityField('Potenza Str 1', 'solar.strings.0.entity_power', '')}
-          ${this._txt('Nome Str 1', 'solar.strings.0.name', 'Str 1')}
-          ${this._txt('Unità Str 1', 'solar.strings.0.unit', 'kW')}
-
-          <div class="sec-sub">Stringa 2</div>
-          ${this._entityField('Potenza Str 2', 'solar.strings.1.entity_power', '')}
-          ${this._txt('Nome Str 2', 'solar.strings.1.name', 'Str 2')}
-          ${this._txt('Unità Str 2', 'solar.strings.1.unit', 'kW')}
-
-          <div class="sec-sub">Stringa 3</div>
-          ${this._entityField('Potenza Str 3', 'solar.strings.2.entity_power', '')}
-          ${this._txt('Nome Str 3', 'solar.strings.2.name', 'Str 3')}
-          ${this._txt('Unità Str 3', 'solar.strings.2.unit', 'kW')}
-
-          <div class="sec-sub">Stringa 4</div>
-          ${this._entityField('Potenza Str 4', 'solar.strings.3.entity_power', '')}
-          ${this._txt('Nome Str 4', 'solar.strings.3.name', 'Str 4')}
-          ${this._txt('Unità Str 4', 'solar.strings.3.unit', 'kW')}
+          ${this._subTabs('solar',
+            html`
+              ${this._entityField('Potenza', 'solar.entity_power', '')}
+              ${this._txt('Unità (kW / W)', 'solar.unit', 'kW')}
+              <div class="sec-sub">Stringa 1</div>
+              ${this._entityField('Potenza Str 1', 'solar.strings.0.entity_power', '')}
+              ${this._txt('Nome', 'solar.strings.0.name', 'Str 1')}
+              ${this._txt('Unità', 'solar.strings.0.unit', 'kW')}
+              <div class="sec-sub">Stringa 2</div>
+              ${this._entityField('Potenza Str 2', 'solar.strings.1.entity_power', '')}
+              ${this._txt('Nome', 'solar.strings.1.name', 'Str 2')}
+              ${this._txt('Unità', 'solar.strings.1.unit', 'kW')}
+              <div class="sec-sub">Stringa 3</div>
+              ${this._entityField('Potenza Str 3', 'solar.strings.2.entity_power', '')}
+              ${this._txt('Nome', 'solar.strings.2.name', 'Str 3')}
+              ${this._txt('Unità', 'solar.strings.2.unit', 'kW')}
+              <div class="sec-sub">Stringa 4</div>
+              ${this._entityField('Potenza Str 4', 'solar.strings.3.entity_power', '')}
+              ${this._txt('Nome', 'solar.strings.3.name', 'Str 4')}
+              ${this._txt('Unità', 'solar.strings.3.unit', 'kW')}
+            `,
+            html`
+              ${this._entityField('Energia prodotta', 'solar.entity_energy', '')}
+              <div class="sec-sub">Stringa 1</div>
+              ${this._entityField('Energia Str 1', 'solar.strings.0.entity_energy', '')}
+              <div class="sec-sub">Stringa 2</div>
+              ${this._entityField('Energia Str 2', 'solar.strings.1.entity_energy', '')}
+              <div class="sec-sub">Stringa 3</div>
+              ${this._entityField('Energia Str 3', 'solar.strings.2.entity_energy', '')}
+              <div class="sec-sub">Stringa 4</div>
+              ${this._entityField('Energia Str 4', 'solar.strings.3.entity_energy', '')}
+            `
+          )}
         `)}
 
         ${this._section('grid', '⚡', 'Rete', html`
-          ${this._entityField('Prelievo (W)',               'grid.entity_import',        'sensor.sun2000_buy_power')}
-          ${this._entityField('Immissione (W)',             'grid.entity_export',        'sensor.sun2000_sell_power')}
-          ${this._entityField('Energia prelievo storico',   'grid.entity_import_energy', '')}
-          ${this._entityField('Energia immissione storico', 'grid.entity_export_energy', '')}
+          ${this._subTabs('grid',
+            html`
+              ${this._entityField('Prelievo (W)', 'grid.entity_import', '')}
+              ${this._entityField('Immissione (W)', 'grid.entity_export', '')}
+            `,
+            html`
+              ${this._entityField('Energia prelievo', 'grid.entity_import_energy', '')}
+              ${this._entityField('Energia immissione', 'grid.entity_export_energy', '')}
+            `
+          )}
         `)}
 
         ${this._section('battery', '🔋', 'Batteria', html`
-          ${this._entityField('Carica (W)',             'battery.entity_power',      'sensor.sun2000_bat_charge')}
-          ${this._entityField('Scarica (W, separato)',  'battery.entity_discharge',  'sensor.sun2000_bat_discharge')}
-          ${this._entityField('SOC (%)',                'battery.entity_soc',        'sensor.battery_state_of_capacity')}
-          ${this._entityField('Energia carica storico',  'battery.entity_energy_in',  '')}
-          ${this._entityField('Energia scarica storico', 'battery.entity_energy_out', '')}
+          ${this._subTabs('battery',
+            html`
+              ${this._entityField('Carica (W)', 'battery.entity_power', '')}
+              ${this._entityField('Scarica (W)', 'battery.entity_discharge', '')}
+              ${this._entityField('SOC (%)', 'battery.entity_soc', '')}
+            `,
+            html`
+              ${this._entityField('Energia carica', 'battery.entity_energy_in', '')}
+              ${this._entityField('Energia scarica', 'battery.entity_energy_out', '')}
+            `
+          )}
         `)}
 
         ${this._section('home', '🏠', 'Casa', html`
-          ${this._entityField('Potenza totale (W)', 'home.entity_power',  'sensor.generale_power')}
-          ${this._entityField('Energia storico',    'home.entity_energy', '')}
-
-          <div class="sec-sub">Carico 1</div>
-          ${this._entityField('Potenza CR1', 'home.loads.0.entity_power', '')}
-          ${this._txt('Nome CR1', 'home.loads.0.name', 'Carico 1')}
-          ${this._color('Colore CR1', 'home.loads.0.color', '#26C6DA')}
-
-          <div class="sec-sub">Carico 2</div>
-          ${this._entityField('Potenza CR2', 'home.loads.1.entity_power', '')}
-          ${this._txt('Nome CR2', 'home.loads.1.name', 'Carico 2')}
-          ${this._color('Colore CR2', 'home.loads.1.color', '#26C6DA')}
-
-          <div class="sec-sub">Carico 3</div>
-          ${this._entityField('Potenza CR3', 'home.loads.2.entity_power', '')}
-          ${this._txt('Nome CR3', 'home.loads.2.name', 'Carico 3')}
-          ${this._color('Colore CR3', 'home.loads.2.color', '#26C6DA')}
-
-          <div class="sec-sub">Carico 4</div>
-          ${this._entityField('Potenza CR4', 'home.loads.3.entity_power', '')}
-          ${this._txt('Nome CR4', 'home.loads.3.name', 'Carico 4')}
-          ${this._color('Colore CR4', 'home.loads.3.color', '#26C6DA')}
-
-          <div class="sec-sub">Carico 5</div>
-          ${this._entityField('Potenza CR5', 'home.loads.4.entity_power', '')}
-          ${this._txt('Nome CR5', 'home.loads.4.name', 'Carico 5')}
-          ${this._color('Colore CR5', 'home.loads.4.color', '#26C6DA')}
+          ${this._subTabs('home',
+            html`
+              ${this._entityField('Potenza totale (W)', 'home.entity_power', '')}
+              <div class="sec-sub">Carico 1</div>
+              ${this._entityField('Potenza CR1', 'home.loads.0.entity_power', '')}
+              ${this._txt('Nome CR1', 'home.loads.0.name', 'Carico 1')}
+              ${this._color('Colore CR1', 'home.loads.0.color', '#26C6DA')}
+              <div class="sec-sub">Carico 2</div>
+              ${this._entityField('Potenza CR2', 'home.loads.1.entity_power', '')}
+              ${this._txt('Nome CR2', 'home.loads.1.name', 'Carico 2')}
+              ${this._color('Colore CR2', 'home.loads.1.color', '#26C6DA')}
+              <div class="sec-sub">Carico 3</div>
+              ${this._entityField('Potenza CR3', 'home.loads.2.entity_power', '')}
+              ${this._txt('Nome CR3', 'home.loads.2.name', 'Carico 3')}
+              ${this._color('Colore CR3', 'home.loads.2.color', '#26C6DA')}
+              <div class="sec-sub">Carico 4</div>
+              ${this._entityField('Potenza CR4', 'home.loads.3.entity_power', '')}
+              ${this._txt('Nome CR4', 'home.loads.3.name', 'Carico 4')}
+              ${this._color('Colore CR4', 'home.loads.3.color', '#26C6DA')}
+              <div class="sec-sub">Carico 5</div>
+              ${this._entityField('Potenza CR5', 'home.loads.4.entity_power', '')}
+              ${this._txt('Nome CR5', 'home.loads.4.name', 'Carico 5')}
+              ${this._color('Colore CR5', 'home.loads.4.color', '#26C6DA')}
+            `,
+            html`
+              ${this._entityField('Energia totale', 'home.entity_energy', '')}
+              <div class="sec-sub">Carico 1</div>
+              ${this._entityField('Energia CR1', 'home.loads.0.entity_energy', '')}
+              <div class="sec-sub">Carico 2</div>
+              ${this._entityField('Energia CR2', 'home.loads.1.entity_energy', '')}
+              <div class="sec-sub">Carico 3</div>
+              ${this._entityField('Energia CR3', 'home.loads.2.entity_energy', '')}
+              <div class="sec-sub">Carico 4</div>
+              ${this._entityField('Energia CR4', 'home.loads.3.entity_energy', '')}
+              <div class="sec-sub">Carico 5</div>
+              ${this._entityField('Energia CR5', 'home.loads.4.entity_energy', '')}
+            `
+          )}
         `)}
 
         ${this._section('appearance', '🎨', 'Aspetto', html`
@@ -916,26 +971,26 @@ class EnergyFlowCardEditor extends LitElement {
           ${this._slider('Raggio nodi',    'appearance.node_radius', 40, 120, 1, 77, 'px')}
           ${this._slider('Pallini flusso', 'appearance.dot_size',    2,  12,  1, 6,  'px')}
 
-          <div class="sec-sub">Animazione flusso</div>
+          <div class="sec-sub">Animazione</div>
           ${this._txt('Velocità pallini (auto oppure secondi)', 'appearance.dot_speed', 'auto')}
 
           <div class="sec-sub">Glow</div>
           ${this._slider('Intensità',     'appearance.glow_intensity', 0,   1, 0.01, 0.08)}
           ${this._slider('Velocità pulse','appearance.glow_speed',     0.5, 8, 0.1,  2.8, 's')}
 
-          <div class="sec-sub">Linee connettori</div>
+          <div class="sec-sub">Linee</div>
           ${this._slider('Spessore',        'appearance.line_width',            0.5, 6,   0.5,  2.5, 'px')}
           ${this._slider('Opacità inattivo','appearance.line_opacity_inactive', 0,   1,   0.05, 0.15)}
 
           <div class="sec-sub">Soglia flusso</div>
-          ${this._slider('Watt minimi per attivare', 'appearance.flow_threshold', 1, 100, 1, 5, 'W')}
+          ${this._slider('Watt minimi', 'appearance.flow_threshold', 1, 100, 1, 10, 'W')}
 
           <div class="sec-sub">Font — nodi principali</div>
           <div class="row2">
             ${this._num('Titolo (px)',  'appearance.font_node_label',    '19')}
             ${this._num('Valore (px)',  'appearance.font_node_value',    '31')}
           </div>
-          ${this._num('Valore secondario (px)', 'appearance.font_node_secondary', '15')}
+          ${this._num('Secondario (px)', 'appearance.font_node_secondary', '15')}
 
           <div class="sec-sub">Font — stringhe e carichi</div>
           <div class="row2">
@@ -987,12 +1042,16 @@ class EnergyFlowCardEditor extends LitElement {
                         border-top:1px solid var(--divider-color); }
       .sec-sub { font-size:11px; font-weight:600; color:var(--secondary-text-color);
                  text-transform:uppercase; letter-spacing:.06em; margin-top:6px; }
-      .f { margin-bottom:4px; }
-      label { display:block; font-size:11px; color:var(--secondary-text-color); margin-bottom:2px; }
-      input[type=text], input[type=number] {
-        width:100%; box-sizing:border-box; padding:6px 8px; font-size:12px;
-        border:1px solid var(--divider-color,#555); border-radius:6px;
-        background:var(--card-background-color); color:var(--primary-text-color); }
+      /* Sotto-tab */
+      .subtab-bar { display:flex; gap:0; border:1px solid var(--divider-color); border-radius:8px;
+                    overflow:hidden; margin-bottom:10px; }
+      .subtab { flex:1; padding:8px; text-align:center; font-size:12px; font-weight:600;
+                cursor:pointer; color:var(--secondary-text-color);
+                background:var(--card-background-color); transition:all .15s; }
+      .subtab:first-child { border-right:1px solid var(--divider-color); }
+      .subtab-active { color:var(--primary-text-color); background:var(--secondary-background-color); }
+      .subtab-body { display:flex; flex-direction:column; gap:8px; }
+      /* Entity field */
       ha-textfield { width:100%; display:block; }
       .entity-dropdown { position:absolute; z-index:999; width:100%; max-height:200px; overflow-y:auto;
                          background:var(--card-background-color); border:1px solid var(--divider-color);
@@ -1002,17 +1061,28 @@ class EnergyFlowCardEditor extends LitElement {
       .entity-option:hover { background:var(--secondary-background-color); }
       .entity-option-name { color:var(--primary-text-color); font-weight:500; }
       .entity-option-id   { font-size:11px; color:var(--secondary-text-color); }
+      /* Fields */
+      .f { margin-bottom:4px; }
+      label { display:block; font-size:11px; color:var(--secondary-text-color); margin-bottom:2px; }
+      input[type=text], input[type=number] {
+        width:100%; box-sizing:border-box; padding:6px 8px; font-size:12px;
+        border:1px solid var(--divider-color,#555); border-radius:6px;
+        background:var(--card-background-color); color:var(--primary-text-color); }
+      /* Slider */
       .slider-row  { display:flex; align-items:center; gap:8px; }
       .slider-lbl  { font-size:12px; color:var(--primary-text-color); flex:0 0 140px; }
       .slider-wrap { display:flex; align-items:center; gap:6px; flex:1; }
       .slider-wrap input[type=range] { flex:1; accent-color:var(--primary-color); }
       .slider-val  { font-size:12px; color:var(--secondary-text-color); min-width:36px; text-align:right; }
+      /* Toggle */
       .glow-row { display:flex; align-items:center; padding:6px 0; }
       .glow-lbl { font-size:13px; color:var(--primary-text-color); flex:1; }
+      /* Color */
       .color-wrap { display:flex; gap:6px; align-items:center; }
       .color-wrap input[type=color] { width:36px; height:32px; padding:2px; border-radius:6px;
         border:1px solid var(--divider-color); cursor:pointer; background:none; flex-shrink:0; }
       .color-wrap input[type=text] { flex:1; }
+      /* Grid 2 col */
       .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     `;
   }
