@@ -1,9 +1,9 @@
 // =============================================================================
-// ENERGY FLOW CARD — energy-flow-card.js  v1.3.2
+// ENERGY FLOW CARD — energy-flow-card.js  v1.4.1
 // Repository: github.com/themask1987/energy-flow-card
 // =============================================================================
 
-const CARD_VERSION = '1.3.2';
+const CARD_VERSION = '1.4.1';
 
 const VB = { w: 700, h: 760 };
 
@@ -500,10 +500,16 @@ ${buildCSS(app)}
         const batEOut = gR(cfg.battery?.entity_energy_out);
         this._t('efc-v-battery1', fmtE(batEIn), app.fontNodeValue);
         this._t('efc-v-battery2', fmtE(batEOut), app.fontNodeSecondary);
+        // In storico usa valori energia per opacità
+        const batHistActive = (batEIn !== null && !isNaN(batEIn) && batEIn > 0) ||
+                              (batEOut !== null && !isNaN(batEOut) && batEOut > 0);
+        this._setOpacity('efc-nd-battery', batHistActive, app.lineOpacityInactive);
       }
 
-      const batActive = isActiveValue(batW, thr, mode);
-      this._setOpacity('efc-nd-battery', batActive, app.lineOpacityInactive);
+      if (mode === 'realtime') {
+        // In realtime la batteria è sempre visibile
+        this._setOpacity('efc-nd-battery', true, app.lineOpacityInactive);
+      }
     }
 
     // CASA
@@ -560,6 +566,13 @@ ${buildCSS(app)}
   // ---------------------------------------------------------------------------
 
   _updateDots({ solarW, gridIn, gridOut, batW }) {
+    // In modalità storico non animare i pallini
+    if (this._mode === 'history') {
+      const g = this.shadowRoot.getElementById('efc-dots');
+      if (g) g.innerHTML = '';
+      this._lastDotSig = null;
+      return;
+    }
     const g = this.shadowRoot.getElementById('efc-dots');
     if (!g) return;
     const app  = this._app;
