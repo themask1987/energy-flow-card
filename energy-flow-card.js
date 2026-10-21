@@ -1,9 +1,9 @@
 // =============================================================================
-// ENERGY FLOW CARD — energy-flow-card.js  v1.5.0
+// ENERGY FLOW CARD — energy-flow-card.js  v1.5.1
 // Repository: github.com/themask1987/energy-flow-card
 // =============================================================================
 
-const CARD_VERSION = '1.5.0';
+const CARD_VERSION = '1.5.1';
 
 const VB = { w: 700, h: 760 };
 
@@ -46,8 +46,8 @@ const DEFAULT_COLORS_MODERN = {
 };
 
 // Nodi dello stile moderno: rettangoli arrotondati centrati su POS
-const M_HALF_W = 115;
-const M_HALF_H = 59;
+const M_HALF_W = 125;
+const M_HALF_H = 62;
 const M_SCALE_W = 3000;   // potenza a cui la linea raggiunge lo spessore massimo
 
 function isModern(cfg) {
@@ -69,7 +69,7 @@ function resolveAppearance(cfg) {
     lineOpacityInactive : parseFloat(a.line_opacity_inactive) || 0.15,
     flowThreshold       : parseInt(a.flow_threshold)          || 10,
     fontNodeLabel       : parseInt(a.font_node_label)         || 19,
-    fontNodeValue       : parseInt(a.font_node_value)         || (modern ? 29 : 31),
+    fontNodeValue       : parseInt(a.font_node_value)         || (modern ? 38 : 31),
     fontNodeSecondary   : parseInt(a.font_node_secondary)     || 15,
     fontSecLabel        : parseInt(a.font_secondary_label)    || 14,
     fontSecValue        : parseInt(a.font_secondary_value)    || 19,
@@ -377,7 +377,12 @@ function modernPaths() {
 }
 
 function mIcon(kind, cx, cy, color) {
-  const a = `stroke="${color}" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+  const g = mIconShape(kind, cx, cy, color);
+  return `<g transform="translate(${cx} ${cy}) scale(1.5) translate(${-cx} ${-cy})">${g}</g>`;
+}
+
+function mIconShape(kind, cx, cy, color) {
+  const a = `stroke="${color}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
   if (kind === 'solar') {
     const rays = [0, 45, 90, 135, 180, 225, 270, 315].map(d => {
       const r = d * Math.PI / 180;
@@ -394,21 +399,22 @@ function mIcon(kind, cx, cy, color) {
 
 function drawMainNodeModern(id, pos, col, label, valId1, valId2, app) {
   const x = pos.x - M_HALF_W, y = pos.y - M_HALF_H;
-  const ix = x + 50, iy = pos.y, rr = 27;
+  const ix = x + 50, iy = pos.y, rr = 36;
   const circ = (2 * Math.PI * rr).toFixed(1);
   const isBat = id === 'battery';
   const ring = isBat ? `
-  <circle cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke-width="5" class="efc-track"/>
-  <circle id="efc-ring-battery" cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke="${col.stroke}" stroke-width="5"
+  <circle cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke-width="6" class="efc-track"/>
+  <circle id="efc-ring-battery" cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke="${col.stroke}" stroke-width="6"
     stroke-linecap="round" stroke-dasharray="0 ${circ}" data-circ="${circ}" transform="rotate(-90 ${ix} ${iy})"/>`
     : `<circle cx="${ix}" cy="${iy}" r="${rr - 2}" fill="${col.stroke}" opacity="0.13"/>`;
   const badge = (dir, fill) => {
     const up = dir === 'up';
-    const y1 = up ? iy + 24 : iy + 20, y2 = up ? iy + 20 : iy + 24;
+    const bx = ix + 26, by = iy + 28;
+    const y1 = up ? by + 4 : by - 4, y2 = up ? by - 4 : by + 4;
     return `<g id="efc-badge-${dir}" style="display:none">
-    <circle cx="${ix + 19}" cy="${iy + 20}" r="10" fill="${fill}" class="efc-badge-ring"/>
-    <polyline points="${ix + 15},${y1 + 1} ${ix + 19},${y2 - 1} ${ix + 23},${y1 + 1}" fill="none" stroke="#fff"
-      stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+    <circle cx="${bx}" cy="${by}" r="13" fill="${fill}" class="efc-badge-ring"/>
+    <polyline points="${bx - 6},${y1} ${bx},${y2} ${bx + 6},${y1}" fill="none" stroke="#fff"
+      stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></g>`;
   };
   return `
 <g class="efc-node" id="efc-nd-${id}" data-entity="">
@@ -417,9 +423,9 @@ function drawMainNodeModern(id, pos, col, label, valId1, valId2, app) {
   ${ring}
   ${mIcon(id, ix, iy, col.stroke)}
   ${isBat ? badge('up', col.stroke) + badge('down', '#F2A93B') : ''}
-  <text x="${x + 92}" y="${y + 34}" font-size="13" font-weight="600" letter-spacing="1.2" class="efc-sub">${label}</text>
-  <text id="${valId1}" x="${x + 92}" y="${y + 72}" font-size="${app.fontNodeValue}" font-weight="700" class="efc-txt">—</text>
-  <text id="${valId2}" x="${x + 92}" y="${y + 97}" font-size="12" font-weight="600" fill="${col.stroke}"></text>
+  <text x="${x + 100}" y="${y + 34}" font-size="15" font-weight="600" letter-spacing="1.2" class="efc-sub">${label}</text>
+  <text id="${valId1}" x="${x + 100}" y="${y + 78}" font-size="${app.fontNodeValue}" font-weight="700" class="efc-txt">—</text>
+  <text id="${valId2}" x="${x + 100}" y="${y + 105}" font-size="13.5" font-weight="600" fill="${col.stroke}"></text>
 </g>`;
 }
 
@@ -427,8 +433,8 @@ function drawChipModern(gid, x, y, w, name, valId, stroke, app, op) {
   return `
 <g class="efc-node" id="${gid}" data-entity="" style="opacity:${op}">
   <rect class="efc-nb" x="${x}" y="${y}" width="${w}" height="58" rx="16" stroke="${stroke}" stroke-opacity="0.55" stroke-width="1.5"/>
-  <text x="${x + 14}" y="${y + 23}" font-size="${name.length > 11 ? 11 : app.fontSecLabel - 1}" font-weight="600" class="efc-sub">${name}</text>
-  <text id="${valId}" x="${x + 14}" y="${y + 45}" font-size="${app.fontSecValue - 1}" font-weight="700" class="efc-txt">—</text>
+  <text x="${x + 14}" y="${y + 22}" font-size="${name.length > 11 ? 12 : app.fontSecLabel}" font-weight="600" class="efc-sub">${name}</text>
+  <text id="${valId}" x="${x + 14}" y="${y + 48}" font-size="${app.fontSecValue + 4}" font-weight="700" class="efc-txt">—</text>
 </g>`;
 }
 
@@ -593,7 +599,7 @@ ${buildCSS(app)}
     ).join('') : ''}
 
     ${this._statsOn ? `
-    <text id="efc-stats" x="${VB.w / 2}" y="${vbH - 74}" text-anchor="middle" font-size="15" font-weight="600" class="efc-sub"></text>` : ''}
+    <text id="efc-stats" x="${VB.w / 2}" y="${vbH - 74}" text-anchor="middle" font-size="17" font-weight="600" class="efc-sub"></text>` : ''}
 
     ${vis.showHistoryBtn && modern ? `
     <g class="efc-mode-btn" onclick="this.getRootNode().host._toggleMode()"
