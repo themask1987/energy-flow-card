@@ -1,9 +1,9 @@
 // =============================================================================
-// ENERGY FLOW CARD — energy-flow-card.js  v1.5.1
+// ENERGY FLOW CARD — energy-flow-card.js  v1.6.0
 // Repository: github.com/themask1987/energy-flow-card
 // =============================================================================
 
-const CARD_VERSION = '1.5.1';
+const CARD_VERSION = '1.6.0';
 
 const VB = { w: 700, h: 760 };
 
@@ -46,8 +46,15 @@ const DEFAULT_COLORS_MODERN = {
 };
 
 // Nodi dello stile moderno: rettangoli arrotondati centrati su POS
-const M_HALF_W = 125;
-const M_HALF_H = 62;
+const M_HALF_W = 145;
+const M_HALF_H = 75;
+const M_CHIP_H = 68;
+const MPOS = {
+  solar   : { x: 155, y: 220 },
+  battery : { x: 545, y: 220 },
+  grid    : { x: 155, y: 530 },
+  home    : { x: 545, y: 530 },
+};
 const M_SCALE_W = 3000;   // potenza a cui la linea raggiunge lo spessore massimo
 
 function isModern(cfg) {
@@ -69,10 +76,10 @@ function resolveAppearance(cfg) {
     lineOpacityInactive : parseFloat(a.line_opacity_inactive) || 0.15,
     flowThreshold       : parseInt(a.flow_threshold)          || 10,
     fontNodeLabel       : parseInt(a.font_node_label)         || 19,
-    fontNodeValue       : parseInt(a.font_node_value)         || (modern ? 38 : 31),
+    fontNodeValue       : parseInt(a.font_node_value)         || (modern ? 46 : 31),
     fontNodeSecondary   : parseInt(a.font_node_secondary)     || 15,
-    fontSecLabel        : parseInt(a.font_secondary_label)    || 14,
-    fontSecValue        : parseInt(a.font_secondary_value)    || 19,
+    fontSecLabel        : parseInt(a.font_secondary_label)    || (modern ? 15 : 14),
+    fontSecValue        : parseInt(a.font_secondary_value)    || (modern ? 30 : 19),
   };
 }
 
@@ -214,7 +221,7 @@ function buildCSSModern(app) {
   svg text { font-family: var(--paper-font-body1_-_font-family, Roboto, system-ui, sans-serif); font-variant-numeric: tabular-nums; }
   .efc-txt  { fill:var(--efc-text); }
   .efc-sub, .efc-unit { fill:var(--efc-sub); }
-  .efc-unit { font-size:0.52em; font-weight:600; }
+  .efc-unit { font-size:0.5em; font-weight:600; }
   .efc-nb   { fill:var(--efc-node); }
   .efc-track { stroke:var(--efc-track); }
   .efc-idle { stroke:var(--efc-track); }
@@ -298,11 +305,11 @@ function drawStringBox(slotIdx, name, valId, app, col) {
 </g>`;
 }
 
-function drawStringLine(slotIdx, r, col, app) {
+function drawStringLine(slotIdx, r, col, app, pos = POS, boxH = STR_BOX_H) {
   const cx = STR_SLOT_X[slotIdx] + STR_BOX_W / 2;
-  const sy = STR_Y + STR_BOX_H;
-  const tx = POS.solar.x;
-  const ty = POS.solar.y - r;
+  const sy = STR_Y + boxH;
+  const tx = pos.solar.x;
+  const ty = pos.solar.y - r;
   return `<path id="efc-strline-${slotIdx}" d="M ${cx} ${sy} C ${cx} ${(sy+ty)/2+10} ${tx} ${(sy+ty)/2-10} ${tx} ${ty}"
     fill="none" stroke="${col.stroke}" stroke-width="${app.lineWidth * 0.5}"
     stroke-dasharray="5 3" opacity="0.45"/>`;
@@ -326,10 +333,10 @@ function drawLoadBox(slotIdx, name, color, valId, active, app, defaultCol) {
 </g>`;
 }
 
-function drawLoadLine(slotIdx, color, active, r, app) {
+function drawLoadLine(slotIdx, color, active, r, app, pos = POS) {
   const cx = LOAD_SLOT_X[slotIdx] + LOAD_BOX_W / 2;
-  const hx = POS.home.x;
-  const hy = POS.home.y + r;
+  const hx = pos.home.x;
+  const hy = pos.home.y + r;
   const my = (hy + LOAD_Y) / 2 - 10;
   const op = active ? 0.5 : app.lineOpacityInactive;
   return `<path id="efc-loadline-${slotIdx}" d="M ${hx} ${hy} C ${hx} ${my+20} ${cx} ${my} ${cx} ${LOAD_Y}"
@@ -366,7 +373,7 @@ function makeDots(path, color, watt, app, radius = null) {
 // =============================================================================
 
 function modernPaths() {
-  const s = POS.solar, b = POS.battery, g = POS.grid, h = POS.home;
+  const s = MPOS.solar, b = MPOS.battery, g = MPOS.grid, h = MPOS.home;
   return {
     pathSolarBattery : `M ${s.x + M_HALF_W} ${s.y} H ${b.x - M_HALF_W}`,
     pathSolarGrid    : `M ${s.x} ${s.y + M_HALF_H} V ${g.y - M_HALF_H}`,
@@ -378,11 +385,11 @@ function modernPaths() {
 
 function mIcon(kind, cx, cy, color) {
   const g = mIconShape(kind, cx, cy, color);
-  return `<g transform="translate(${cx} ${cy}) scale(1.5) translate(${-cx} ${-cy})">${g}</g>`;
+  return `<g transform="translate(${cx} ${cy}) scale(1.8) translate(${-cx} ${-cy})">${g}</g>`;
 }
 
 function mIconShape(kind, cx, cy, color) {
-  const a = `stroke="${color}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+  const a = `stroke="${color}" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
   if (kind === 'solar') {
     const rays = [0, 45, 90, 135, 180, 225, 270, 315].map(d => {
       const r = d * Math.PI / 180;
@@ -399,42 +406,42 @@ function mIconShape(kind, cx, cy, color) {
 
 function drawMainNodeModern(id, pos, col, label, valId1, valId2, app) {
   const x = pos.x - M_HALF_W, y = pos.y - M_HALF_H;
-  const ix = x + 50, iy = pos.y, rr = 36;
+  const ix = x + 56, iy = pos.y, rr = 42;
   const circ = (2 * Math.PI * rr).toFixed(1);
   const isBat = id === 'battery';
   const ring = isBat ? `
-  <circle cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke-width="6" class="efc-track"/>
-  <circle id="efc-ring-battery" cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke="${col.stroke}" stroke-width="6"
+  <circle cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke-width="7" class="efc-track"/>
+  <circle id="efc-ring-battery" cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke="${col.stroke}" stroke-width="7"
     stroke-linecap="round" stroke-dasharray="0 ${circ}" data-circ="${circ}" transform="rotate(-90 ${ix} ${iy})"/>`
     : `<circle cx="${ix}" cy="${iy}" r="${rr - 2}" fill="${col.stroke}" opacity="0.13"/>`;
   const badge = (dir, fill) => {
     const up = dir === 'up';
-    const bx = ix + 26, by = iy + 28;
-    const y1 = up ? by + 4 : by - 4, y2 = up ? by - 4 : by + 4;
+    const bx = ix + 30, by = iy + 33;
+    const y1 = up ? by + 5 : by - 5, y2 = up ? by - 5 : by + 5;
     return `<g id="efc-badge-${dir}" style="display:none">
-    <circle cx="${bx}" cy="${by}" r="13" fill="${fill}" class="efc-badge-ring"/>
-    <polyline points="${bx - 6},${y1} ${bx},${y2} ${bx + 6},${y1}" fill="none" stroke="#fff"
-      stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+    <circle cx="${bx}" cy="${by}" r="15" fill="${fill}" class="efc-badge-ring"/>
+    <polyline points="${bx - 7},${y1} ${bx},${y2} ${bx + 7},${y1}" fill="none" stroke="#fff"
+      stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></g>`;
   };
   return `
 <g class="efc-node" id="efc-nd-${id}" data-entity="">
-  <rect class="efc-nb" x="${x}" y="${y}" width="${M_HALF_W * 2}" height="${M_HALF_H * 2}" rx="24"
+  <rect class="efc-nb" x="${x}" y="${y}" width="${M_HALF_W * 2}" height="${M_HALF_H * 2}" rx="28"
     stroke="${col.stroke}" stroke-opacity="0.55" stroke-width="1.5"/>
   ${ring}
   ${mIcon(id, ix, iy, col.stroke)}
   ${isBat ? badge('up', col.stroke) + badge('down', '#F2A93B') : ''}
-  <text x="${x + 100}" y="${y + 34}" font-size="15" font-weight="600" letter-spacing="1.2" class="efc-sub">${label}</text>
-  <text id="${valId1}" x="${x + 100}" y="${y + 78}" font-size="${app.fontNodeValue}" font-weight="700" class="efc-txt">—</text>
-  <text id="${valId2}" x="${x + 100}" y="${y + 105}" font-size="13.5" font-weight="600" fill="${col.stroke}"></text>
+  <text x="${x + 114}" y="${y + 34}" font-size="18" font-weight="600" letter-spacing="1.2" class="efc-sub">${label}</text>
+  <text id="${valId1}" x="${x + 114}" y="${y + 88}" font-size="${app.fontNodeValue}" font-weight="700" class="efc-txt">—</text>
+  <text id="${valId2}" x="${x + 114}" y="${y + 124}" font-size="16.5" font-weight="600" fill="${col.stroke}"></text>
 </g>`;
 }
 
 function drawChipModern(gid, x, y, w, name, valId, stroke, app, op) {
   return `
 <g class="efc-node" id="${gid}" data-entity="" style="opacity:${op}">
-  <rect class="efc-nb" x="${x}" y="${y}" width="${w}" height="58" rx="16" stroke="${stroke}" stroke-opacity="0.55" stroke-width="1.5"/>
-  <text x="${x + 14}" y="${y + 22}" font-size="${name.length > 11 ? 12 : app.fontSecLabel}" font-weight="600" class="efc-sub">${name}</text>
-  <text id="${valId}" x="${x + 14}" y="${y + 48}" font-size="${app.fontSecValue + 4}" font-weight="700" class="efc-txt">—</text>
+  <rect class="efc-nb" x="${x}" y="${y}" width="${w}" height="${M_CHIP_H}" rx="16" stroke="${stroke}" stroke-opacity="0.55" stroke-width="1.5"/>
+  <text x="${x + 14}" y="${y + 25}" font-size="${name.length > 11 ? app.fontSecLabel - 2 : app.fontSecLabel}" font-weight="600" class="efc-sub">${name}</text>
+  <text id="${valId}" x="${x + 14}" y="${y + 54}" font-size="${app.fontSecValue}" font-weight="700" class="efc-txt">—</text>
 </g>`;
 }
 
@@ -521,6 +528,7 @@ class EnergyFlowCard extends HTMLElement {
     loads.forEach((load, i) => { loadSlotMap[LOAD_SLOTS[i]] = load; });
 
     const modern = app.modern;
+    const NP     = modern ? MPOS : POS;
     const rn     = modern ? M_HALF_H : r;   // metà altezza del nodo: da qui partono le linee di stringhe e carichi
     const pathSolarBattery = `M ${POS.solar.x + r} ${POS.solar.y - 12} C ${POS.solar.x + 160} ${POS.solar.y - 40} ${POS.battery.x - 160} ${POS.battery.y - 40} ${POS.battery.x - r} ${POS.battery.y - 12}`;
     const pathSolarGrid    = `M ${POS.solar.x - 12} ${POS.solar.y + r} C ${POS.solar.x - 40} ${POS.solar.y + 100} ${POS.grid.x - 40} ${POS.grid.y - 100} ${POS.grid.x - 12} ${POS.grid.y - r}`;
@@ -535,8 +543,8 @@ class EnergyFlowCard extends HTMLElement {
     const sol = cfg.solar || {}, gr = cfg.grid || {}, ho = cfg.home || {};
     this._statsOn = modern && vis.showSelfCons &&
       !!((sol.entity_energy && gr.entity_export_energy) || (ho.entity_energy && gr.entity_import_energy));
-    const vbH      = modern ? (this._statsOn ? 800 : VB.h) : VB.h;
-    const btnY     = modern ? vbH - 48 : 715;
+    const vbH      = modern ? (this._statsOn ? 820 : 780) : VB.h;
+    const btnY     = modern ? vbH - 52 : 715;
     const btnLabel = this._mode === 'realtime' ? '⚡ Realtime' : '📊 Storico';
     const btnFill  = this._mode === 'realtime' ? '#1565C0' : '#2a2a2a';
 
@@ -547,7 +555,7 @@ ${buildCSS(app)}
     ${buildDefs(app, cols)}
 
     ${vis.showStrings ? strSlotMap.map((str, si) =>
-      str ? drawStringLine(si, rn, cols.solar, app) : ''
+      str ? drawStringLine(si, rn, cols.solar, app, NP, modern ? M_CHIP_H : STR_BOX_H) : ''
     ).join('') : ''}
     ${vis.showStrings ? strSlotMap.map((str, si) =>
       !str ? '' : modern
@@ -572,16 +580,16 @@ ${buildCSS(app)}
     `}
 
     ${vis.showLoads ? loadSlotMap.map((load, li) =>
-      load ? drawLoadLine(li, load.color || '#26C6DA', true, rn, app) : ''
+      load ? drawLoadLine(li, load.color || '#26C6DA', true, rn, app, NP) : ''
     ).join('') : ''}
 
     <g id="efc-dots"></g>
 
     ${modern ? `
-    ${drawMainNodeModern('solar', POS.solar, cols.solar, 'SOLARE', 'efc-v-solar1', 'efc-v-solar2', app)}
-    ${vis.showBattery ? drawMainNodeModern('battery', POS.battery, cols.battery, 'BATTERIA', 'efc-v-battery1', 'efc-v-battery2', app) : ''}
-    ${vis.showGrid ? drawMainNodeModern('grid', POS.grid, cols.grid, 'RETE', 'efc-v-grid1', 'efc-v-grid2', app) : ''}
-    ${drawMainNodeModern('home', POS.home, cols.home, 'CASA', 'efc-v-home1', 'efc-v-home2', app)}
+    ${drawMainNodeModern('solar', MPOS.solar, cols.solar, 'SOLARE', 'efc-v-solar1', 'efc-v-solar2', app)}
+    ${vis.showBattery ? drawMainNodeModern('battery', MPOS.battery, cols.battery, 'BATTERIA', 'efc-v-battery1', 'efc-v-battery2', app) : ''}
+    ${vis.showGrid ? drawMainNodeModern('grid', MPOS.grid, cols.grid, 'RETE', 'efc-v-grid1', 'efc-v-grid2', app) : ''}
+    ${drawMainNodeModern('home', MPOS.home, cols.home, 'CASA', 'efc-v-home1', 'efc-v-home2', app)}
     ` : `
     ${drawMainNode('solar', POS.solar, r, cols.solar, 'efc-gs', '☀ Solare', 'efc-v-solar1', 'efc-v-solar2', app)}
 
@@ -599,17 +607,17 @@ ${buildCSS(app)}
     ).join('') : ''}
 
     ${this._statsOn ? `
-    <text id="efc-stats" x="${VB.w / 2}" y="${vbH - 74}" text-anchor="middle" font-size="17" font-weight="600" class="efc-sub"></text>` : ''}
+    <text id="efc-stats" x="${VB.w / 2}" y="${vbH - 70}" text-anchor="middle" font-size="21" font-weight="600" class="efc-sub"></text>` : ''}
 
     ${vis.showHistoryBtn && modern ? `
     <g class="efc-mode-btn" onclick="this.getRootNode().host._toggleMode()"
-      transform="translate(${(VB.w - 220) / 2}, ${btnY})">
-      <rect x="0" y="0" width="220" height="40" rx="20" class="efc-seg-track"/>
-      <rect id="efc-seg-hl" class="efc-seg-hl" x="3" y="3" width="104" height="34" rx="17"
-        style="transform:translateX(${this._mode === 'realtime' ? 0 : 107}px)"/>
-      <text id="efc-seg-t1" x="55" y="21" text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="600"
+      transform="translate(${(VB.w - 240) / 2}, ${btnY})">
+      <rect x="0" y="0" width="240" height="44" rx="22" class="efc-seg-track"/>
+      <rect id="efc-seg-hl" class="efc-seg-hl" x="3" y="3" width="114" height="38" rx="19"
+        style="transform:translateX(${this._mode === 'realtime' ? 0 : 120}px)"/>
+      <text id="efc-seg-t1" x="60" y="23" text-anchor="middle" dominant-baseline="middle" font-size="17" font-weight="600"
         class="${this._mode === 'realtime' ? 'efc-txt' : 'efc-sub'}">Realtime</text>
-      <text id="efc-seg-t2" x="162" y="21" text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="600"
+      <text id="efc-seg-t2" x="180" y="23" text-anchor="middle" dominant-baseline="middle" font-size="17" font-weight="600"
         class="${this._mode === 'realtime' ? 'efc-sub' : 'efc-txt'}">Storico</text>
     </g>` : ''}
 
@@ -673,7 +681,7 @@ ${buildCSS(app)}
       : gR(cfg.solar?.entity_energy);
     const solarActive = isActiveValue(solarW, thr, mode);
     this._t('efc-v-solar1', val(mode === 'realtime' ? fmtW(solarW) : fmtE(solarW)), app.fontNodeValue);
-    if (M) this._t('efc-v-solar2', mode === 'realtime' ? (solarActive ? 'In produzione' : 'Inattivo') : 'Produzione di oggi');
+    if (M) this._t('efc-v-solar2', mode === 'realtime' ? (solarActive ? 'In produzione' : 'Inattivo') : 'Oggi');
     this._setOpacity('efc-nd-solar', solarActive, dim);
 
     // Stringhe
@@ -704,11 +712,11 @@ ${buildCSS(app)}
       if (M) {
         let main, st;
         if (mode === 'realtime') {
-          if (gridIn > thr)       { main = valIn;  st = 'Preleva dalla rete'; }
-          else if (gridOut > thr) { main = valOut; st = 'Immette in rete'; }
+          if (gridIn > thr)       { main = valIn;  st = 'Prelievo'; }
+          else if (gridOut > thr) { main = valOut; st = 'Immissione'; }
           else                    { main = fmtW(0); st = 'Nessuno scambio'; }
         } else {
-          main = valIn; st = `${valOut} immessi`;
+          main = valIn; st = `Immessi ${valOut}`;
         }
         this._t('efc-v-grid1', mv(main), app.fontNodeValue);
         this._t('efc-v-grid2', st);
@@ -765,7 +773,7 @@ ${buildCSS(app)}
     this._t('efc-v-home1', val(mode === 'realtime' ? fmtW(homeW) : fmtE(homeW)), app.fontNodeValue);
     if (M) {
       let src = 'Consumo';
-      if (mode !== 'realtime') src = 'Consumo di oggi';
+      if (mode !== 'realtime') src = 'Oggi';
       else if (gridIn > thr && solarActive) src = 'Solare + rete';
       else if (gridIn > thr)               src = 'Dalla rete';
       else if (solarActive)                src = 'Dal solare';
@@ -816,14 +824,14 @@ ${buildCSS(app)}
     if (mode === 'realtime') {
       this._t('efc-v-battery1', mv(hasSoc ? `${Math.round(soc)}%` : '—'), this._app.fontNodeValue);
       let st = 'In standby';
-      if (charging)         st = `${fmtW(batW)} in carica`;
-      else if (discharging) st = `${fmtW(-batW)} in scarica`;
+      if (charging)         st = `Carica ${fmtW(batW)}`;
+      else if (discharging) st = `Scarica ${fmtW(-batW)}`;
       this._t('efc-v-battery2', st);
     } else {
       const eIn  = gR(cfg.battery?.entity_energy_in);
       const eOut = gR(cfg.battery?.entity_energy_out);
       this._t('efc-v-battery1', mv(fmtE(eIn)), this._app.fontNodeValue);
-      this._t('efc-v-battery2', `${fmtE(eOut)} scaricati`);
+      this._t('efc-v-battery2', `Scarica ${fmtE(eOut)}`);
       const active = (eIn > 0) || (eOut > 0);
       this._setOpacity('efc-nd-battery', active, 0.55);
     }
@@ -943,7 +951,7 @@ ${buildCSS(app)}
     this._mode = mode;
     const hl = this.shadowRoot.getElementById('efc-seg-hl');
     if (hl) {
-      hl.style.transform = `translateX(${mode === 'realtime' ? 0 : 107}px)`;
+      hl.style.transform = `translateX(${mode === 'realtime' ? 0 : 120}px)`;
       this.shadowRoot.getElementById('efc-seg-t1')?.setAttribute('class', mode === 'realtime' ? 'efc-txt' : 'efc-sub');
       this.shadowRoot.getElementById('efc-seg-t2')?.setAttribute('class', mode === 'realtime' ? 'efc-sub' : 'efc-txt');
     }
