@@ -23,6 +23,9 @@ A custom Lovelace card for Home Assistant that visualizes real-time energy flow 
 - **Solar strings** — up to 4 individual string boxes above the solar node
 - **Home loads** — up to 5 individual load boxes below the home node
 - **Realtime / History toggle** — switch between live power (W/kW) and daily energy (kWh)
+- **Modern style (v1.5)** — rounded nodes that follow the Home Assistant theme (light/dark), line width proportional to power, battery ring with a charge/discharge arrow, tap a node to open its entity
+- **Self-consumption row** — daily self-consumption and self-sufficiency (needs the daily energy entities), hide it with `display.show_self_consumption: false`
+- **Classic style** — the previous neon look is still available: `appearance: { classic: true }`
 - **Fully customizable** — colors, fonts, glow, line width, dot speed, thresholds
 - **Visual editor** — configure everything without touching YAML
 

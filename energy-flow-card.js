@@ -1,9 +1,9 @@
 // =============================================================================
-// ENERGY FLOW CARD — energy-flow-card.js  v1.4.1
+// ENERGY FLOW CARD — energy-flow-card.js  v1.5.0
 // Repository: github.com/themask1987/energy-flow-card
 // =============================================================================
 
-const CARD_VERSION = '1.4.1';
+const CARD_VERSION = '1.5.0';
 
 const VB = { w: 700, h: 760 };
 
@@ -38,9 +38,28 @@ const DEFAULT_COLORS = {
 // Config resolvers
 // =============================================================================
 
+const DEFAULT_COLORS_MODERN = {
+  solar   : { stroke: '#F2A93B', fill: '#1e1400' },
+  battery : { stroke: '#3FB68B', fill: '#1a0020' },
+  grid    : { stroke: '#4C8DF6', fill: '#001533' },
+  home    : { stroke: '#E5675B', fill: '#1a0500' },
+};
+
+// Nodi dello stile moderno: rettangoli arrotondati centrati su POS
+const M_HALF_W = 115;
+const M_HALF_H = 59;
+const M_SCALE_W = 3000;   // potenza a cui la linea raggiunge lo spessore massimo
+
+function isModern(cfg) {
+  const a = cfg?.appearance || {};
+  return !(a.classic === true || a.style === 'classic');
+}
+
 function resolveAppearance(cfg) {
   const a = cfg.appearance || {};
+  const modern = isModern(cfg);
   return {
+    modern,
     nodeRadius          : parseInt(a.node_radius)             || 77,
     dotSize             : parseInt(a.dot_size)                || 6,
     dotSpeed            : a.dot_speed === 'auto' || !a.dot_speed ? 'auto' : parseFloat(a.dot_speed),
@@ -50,7 +69,7 @@ function resolveAppearance(cfg) {
     lineOpacityInactive : parseFloat(a.line_opacity_inactive) || 0.15,
     flowThreshold       : parseInt(a.flow_threshold)          || 10,
     fontNodeLabel       : parseInt(a.font_node_label)         || 19,
-    fontNodeValue       : parseInt(a.font_node_value)         || 31,
+    fontNodeValue       : parseInt(a.font_node_value)         || (modern ? 29 : 31),
     fontNodeSecondary   : parseInt(a.font_node_secondary)     || 15,
     fontSecLabel        : parseInt(a.font_secondary_label)    || 14,
     fontSecValue        : parseInt(a.font_secondary_value)    || 19,
@@ -59,10 +78,11 @@ function resolveAppearance(cfg) {
 
 function resolveColors(cfg) {
   const c = cfg.colors || {};
+  const def = isModern(cfg) ? DEFAULT_COLORS_MODERN : DEFAULT_COLORS;
   const merge = (key) => ({
-    stroke: c[key]?.stroke || DEFAULT_COLORS[key].stroke,
-    fill  : c[key]?.fill   || DEFAULT_COLORS[key].fill,
-    glow  : c[key]?.stroke || DEFAULT_COLORS[key].stroke,
+    stroke: c[key]?.stroke || def[key].stroke,
+    fill  : c[key]?.fill   || def[key].fill,
+    glow  : c[key]?.stroke || def[key].stroke,
   });
   return {
     solar   : merge('solar'),
@@ -80,6 +100,7 @@ function resolveDisplay(cfg) {
     showStrings     : v.show_strings        !== false,
     showLoads       : v.show_loads          !== false,
     showHistoryBtn  : v.show_history_button !== false,
+    showSelfCons    : v.show_self_consumption !== false,
   };
 }
 
@@ -103,16 +124,31 @@ function getRaw(hass, entityId) {
   return s ? parseFloat(s.state) : null;
 }
 
+let NUM_LOCALE = 'it';
+
+function fmtNum(v, digits) {
+  try {
+    return Number(v).toLocaleString(NUM_LOCALE, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  } catch (e) {
+    return Number(v).toFixed(digits);
+  }
+}
+
 function fmtW(w) {
   if (w === null || w === undefined || isNaN(w)) return '—';
   const a = Math.abs(w);
-  if (a >= 1000) return `${(w / 1000).toFixed(2)} kW`;
+  if (a >= 1000) return `${fmtNum(w / 1000, 2)} kW`;
   return `${Math.round(w)} W`;
 }
 
 function fmtE(v) {
   if (v === null || isNaN(v)) return '—';
-  return `${parseFloat(v).toFixed(1)} kWh`;
+  return `${fmtNum(parseFloat(v), 1)} kWh`;
+}
+
+// Stile moderno: numero grande, unita' piu' piccola e in grigio
+function mv(str) {
+  return String(str).replace(/^(-?[\d.,]+)\s*(.+)$/, '$1<tspan class="efc-unit" dx="3">$2</tspan>');
 }
 
 function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
@@ -160,7 +196,52 @@ function buildDefs(app, cols) {
 </defs>`;
 }
 
+function buildCSSModern(app) {
+  return `<style>
+  :host { display:block; }
+  ha-card {
+    padding:8px 10px; box-sizing:border-box; border-radius:var(--ha-card-border-radius, 12px);
+    --efc-text: var(--primary-text-color, #1b1e27);
+    --efc-sub: var(--secondary-text-color, #6a7184);
+    --efc-node: var(--secondary-background-color, #f5f6fa);
+    --efc-track: var(--divider-color, #dfe2ea);
+    --efc-card: var(--card-background-color, #ffffff);
+  }
+  @supports (color: color-mix(in srgb, red, blue)) {
+    ha-card { --efc-node: color-mix(in srgb, var(--primary-text-color, #1b1e27) 5%, var(--card-background-color, #ffffff)); }
+  }
+  svg.efc-svg { width:100%; height:auto; display:block; }
+  svg text { font-family: var(--paper-font-body1_-_font-family, Roboto, system-ui, sans-serif); font-variant-numeric: tabular-nums; }
+  .efc-txt  { fill:var(--efc-text); }
+  .efc-sub, .efc-unit { fill:var(--efc-sub); }
+  .efc-unit { font-size:0.52em; font-weight:600; }
+  .efc-nb   { fill:var(--efc-node); }
+  .efc-track { stroke:var(--efc-track); }
+  .efc-idle { stroke:var(--efc-track); }
+  .efc-badge-ring { stroke:var(--efc-node); stroke-width:2.5; }
+  .efc-seg-track { fill:var(--efc-track); }
+  .efc-seg-hl { fill:var(--efc-card); transition:transform .2s ease; }
+  @keyframes efc-da { to{stroke-dashoffset:-18} }
+  @keyframes efc-fd {
+    0%  {offset-distance:0%;  opacity:0}
+    8%  {opacity:.95}
+    88% {opacity:.95}
+    100%{offset-distance:100%;opacity:0}
+  }
+  .efc-da  { animation:efc-da .7s linear infinite; }
+  .efc-dot { animation:efc-fd 1.5s linear infinite; offset-rotate:0deg; will-change:offset-distance,opacity; }
+  .efc-node { cursor:pointer; }
+  .efc-node:hover .efc-nb { stroke-opacity:1; stroke-width:2.5; }
+  .efc-mode-btn { cursor:pointer; }
+  @media (prefers-reduced-motion: reduce) {
+    .efc-dot, .efc-da { animation:none; }
+    .efc-dot { offset-distance:50%; opacity:.9; }
+  }
+</style>`;
+}
+
 function buildCSS(app) {
+  if (app.modern) return buildCSSModern(app);
   const gi = app.glowIntensity;
   const gs = app.glowSpeed;
   const ds = app.dotSize;
@@ -267,15 +348,100 @@ function drawConnector(path, color, app) {
 </g>`;
 }
 
-function makeDots(path, color, watt, app) {
+function makeDots(path, color, watt, app, radius = null) {
   if (!watt || Math.abs(watt) < app.flowThreshold) return '';
   const dur = flowDur(watt, app);
   const d2  = (parseFloat(dur) / 3).toFixed(2);
   const d3  = (parseFloat(dur) * 2 / 3).toFixed(2);
+  const r   = radius || app.dotSize;
+  const flt = app.modern ? '' : 'filter="url(#efc-dot-glow)"';
   const dot = (delay) =>
-    `<circle class="efc-dot" r="${app.dotSize}" fill="${color}" filter="url(#efc-dot-glow)"
+    `<circle class="efc-dot" r="${r}" fill="${color}" ${flt}
       style="offset-path:path('${path}');animation-duration:${dur}s;animation-delay:-${delay}s"/>`;
   return dot('0') + dot(d2) + dot(d3);
+}
+
+// =============================================================================
+// Stile moderno
+// =============================================================================
+
+function modernPaths() {
+  const s = POS.solar, b = POS.battery, g = POS.grid, h = POS.home;
+  return {
+    pathSolarBattery : `M ${s.x + M_HALF_W} ${s.y} H ${b.x - M_HALF_W}`,
+    pathSolarGrid    : `M ${s.x} ${s.y + M_HALF_H} V ${g.y - M_HALF_H}`,
+    pathSolarHome    : `M ${s.x + 80} ${s.y + M_HALF_H} L ${h.x - 80} ${h.y - M_HALF_H}`,
+    pathBatteryHome  : `M ${b.x} ${b.y + M_HALF_H} V ${h.y - M_HALF_H}`,
+    pathGridHome     : `M ${g.x + M_HALF_W} ${g.y} H ${h.x - M_HALF_W}`,
+  };
+}
+
+function mIcon(kind, cx, cy, color) {
+  const a = `stroke="${color}" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+  if (kind === 'solar') {
+    const rays = [0, 45, 90, 135, 180, 225, 270, 315].map(d => {
+      const r = d * Math.PI / 180;
+      return `<line x1="${(cx + 10 * Math.cos(r)).toFixed(1)}" y1="${(cy + 10 * Math.sin(r)).toFixed(1)}" x2="${(cx + 14 * Math.cos(r)).toFixed(1)}" y2="${(cy + 14 * Math.sin(r)).toFixed(1)}"/>`;
+    }).join('');
+    return `<g ${a}><circle cx="${cx}" cy="${cy}" r="6"/>${rays}</g>`;
+  }
+  if (kind === 'battery')
+    return `<g ${a}><rect x="${cx - 7}" y="${cy - 11}" width="14" height="22" rx="3"/><line x1="${cx - 3}" y1="${cy - 15}" x2="${cx + 3}" y2="${cy - 15}"/><polyline points="${cx + 1},${cy - 6} ${cx - 3},${cy + 1} ${cx + 3},${cy + 1} ${cx - 1},${cy + 8}"/></g>`;
+  if (kind === 'grid')
+    return `<g ${a}><polyline points="${cx + 3},${cy - 13} ${cx - 6},${cy + 2} ${cx + 1},${cy + 2} ${cx - 3},${cy + 13} ${cx + 7},${cy - 3} ${cx},${cy - 3} ${cx + 3},${cy - 13}"/></g>`;
+  return `<g ${a}><polyline points="${cx - 13},${cy} ${cx},${cy - 12} ${cx + 13},${cy}"/><polyline points="${cx - 9},${cy - 3} ${cx - 9},${cy + 11} ${cx + 9},${cy + 11} ${cx + 9},${cy - 3}"/></g>`;
+}
+
+function drawMainNodeModern(id, pos, col, label, valId1, valId2, app) {
+  const x = pos.x - M_HALF_W, y = pos.y - M_HALF_H;
+  const ix = x + 50, iy = pos.y, rr = 27;
+  const circ = (2 * Math.PI * rr).toFixed(1);
+  const isBat = id === 'battery';
+  const ring = isBat ? `
+  <circle cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke-width="5" class="efc-track"/>
+  <circle id="efc-ring-battery" cx="${ix}" cy="${iy}" r="${rr}" fill="none" stroke="${col.stroke}" stroke-width="5"
+    stroke-linecap="round" stroke-dasharray="0 ${circ}" data-circ="${circ}" transform="rotate(-90 ${ix} ${iy})"/>`
+    : `<circle cx="${ix}" cy="${iy}" r="${rr - 2}" fill="${col.stroke}" opacity="0.13"/>`;
+  const badge = (dir, fill) => {
+    const up = dir === 'up';
+    const y1 = up ? iy + 24 : iy + 20, y2 = up ? iy + 20 : iy + 24;
+    return `<g id="efc-badge-${dir}" style="display:none">
+    <circle cx="${ix + 19}" cy="${iy + 20}" r="10" fill="${fill}" class="efc-badge-ring"/>
+    <polyline points="${ix + 15},${y1 + 1} ${ix + 19},${y2 - 1} ${ix + 23},${y1 + 1}" fill="none" stroke="#fff"
+      stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  };
+  return `
+<g class="efc-node" id="efc-nd-${id}" data-entity="">
+  <rect class="efc-nb" x="${x}" y="${y}" width="${M_HALF_W * 2}" height="${M_HALF_H * 2}" rx="24"
+    stroke="${col.stroke}" stroke-opacity="0.55" stroke-width="1.5"/>
+  ${ring}
+  ${mIcon(id, ix, iy, col.stroke)}
+  ${isBat ? badge('up', col.stroke) + badge('down', '#F2A93B') : ''}
+  <text x="${x + 92}" y="${y + 34}" font-size="13" font-weight="600" letter-spacing="1.2" class="efc-sub">${label}</text>
+  <text id="${valId1}" x="${x + 92}" y="${y + 72}" font-size="${app.fontNodeValue}" font-weight="700" class="efc-txt">—</text>
+  <text id="${valId2}" x="${x + 92}" y="${y + 97}" font-size="12" font-weight="600" fill="${col.stroke}"></text>
+</g>`;
+}
+
+function drawChipModern(gid, x, y, w, name, valId, stroke, app, op) {
+  return `
+<g class="efc-node" id="${gid}" data-entity="" style="opacity:${op}">
+  <rect class="efc-nb" x="${x}" y="${y}" width="${w}" height="58" rx="16" stroke="${stroke}" stroke-opacity="0.55" stroke-width="1.5"/>
+  <text x="${x + 14}" y="${y + 23}" font-size="${name.length > 11 ? 11 : app.fontSecLabel - 1}" font-weight="600" class="efc-sub">${name}</text>
+  <text id="${valId}" x="${x + 14}" y="${y + 45}" font-size="${app.fontSecValue - 1}" font-weight="700" class="efc-txt">—</text>
+</g>`;
+}
+
+function drawConnectorModern(path) {
+  return `<path d="${path}" fill="none" class="efc-idle" stroke-width="2" stroke-dasharray="3 7" stroke-linecap="round"/>`;
+}
+
+function flowLineModern(path, color, watt, app) {
+  if (!watt || Math.abs(watt) < app.flowThreshold) return '';
+  const lw = 3 + Math.min(Math.abs(watt) / M_SCALE_W, 1) * 9;
+  const r  = Math.min(8, Math.max(4, lw / 2 + 1.5));
+  return `<path d="${path}" fill="none" stroke="${color}" stroke-opacity="0.28" stroke-width="${lw.toFixed(1)}" stroke-linecap="round"/>`
+    + makeDots(path, color, watt, app, r.toFixed(1));
 }
 
 // =============================================================================
@@ -324,6 +490,7 @@ class EnergyFlowCard extends HTMLElement {
 
   set hass(h) {
     this._hass = h;
+    NUM_LOCALE = h?.locale?.language || h?.language || 'it';
     if (this._ready) this._update();
   }
 
@@ -347,45 +514,69 @@ class EnergyFlowCard extends HTMLElement {
     const loadSlotMap = Array(5).fill(null);
     loads.forEach((load, i) => { loadSlotMap[LOAD_SLOTS[i]] = load; });
 
+    const modern = app.modern;
+    const rn     = modern ? M_HALF_H : r;   // metà altezza del nodo: da qui partono le linee di stringhe e carichi
     const pathSolarBattery = `M ${POS.solar.x + r} ${POS.solar.y - 12} C ${POS.solar.x + 160} ${POS.solar.y - 40} ${POS.battery.x - 160} ${POS.battery.y - 40} ${POS.battery.x - r} ${POS.battery.y - 12}`;
     const pathSolarGrid    = `M ${POS.solar.x - 12} ${POS.solar.y + r} C ${POS.solar.x - 40} ${POS.solar.y + 100} ${POS.grid.x - 40} ${POS.grid.y - 100} ${POS.grid.x - 12} ${POS.grid.y - r}`;
     const pathSolarHome    = `M ${POS.solar.x + r - 22} ${POS.solar.y + r - 22} C ${POS.solar.x + 150} ${POS.solar.y + 90} ${POS.home.x - 150} ${POS.home.y - 90} ${POS.home.x - r + 22} ${POS.home.y - r + 22}`;
     const pathBatteryHome  = `M ${POS.battery.x + 12} ${POS.battery.y + r} C ${POS.battery.x + 40} ${POS.battery.y + 100} ${POS.home.x + 40} ${POS.home.y - 100} ${POS.home.x + 12} ${POS.home.y - r}`;
     const pathGridHome     = `M ${POS.grid.x + r} ${POS.grid.y + 12} C ${POS.grid.x + 160} ${POS.grid.y + 40} ${POS.home.x - 160} ${POS.home.y + 40} ${POS.home.x - r} ${POS.home.y + 12}`;
 
-    this._paths = { pathSolarHome, pathSolarBattery, pathSolarGrid, pathBatteryHome, pathGridHome };
+    this._paths = modern
+      ? modernPaths()
+      : { pathSolarHome, pathSolarBattery, pathSolarGrid, pathBatteryHome, pathGridHome };
 
-    const btnY     = 715;
+    const sol = cfg.solar || {}, gr = cfg.grid || {}, ho = cfg.home || {};
+    this._statsOn = modern && vis.showSelfCons &&
+      !!((sol.entity_energy && gr.entity_export_energy) || (ho.entity_energy && gr.entity_import_energy));
+    const vbH      = modern ? (this._statsOn ? 800 : VB.h) : VB.h;
+    const btnY     = modern ? vbH - 48 : 715;
     const btnLabel = this._mode === 'realtime' ? '⚡ Realtime' : '📊 Storico';
     const btnFill  = this._mode === 'realtime' ? '#1565C0' : '#2a2a2a';
 
     this.shadowRoot.innerHTML = `
 ${buildCSS(app)}
 <ha-card>
-  <svg class="efc-svg" viewBox="0 0 ${VB.w} ${VB.h}" xmlns="http://www.w3.org/2000/svg">
+  <svg class="efc-svg" viewBox="0 0 ${VB.w} ${vbH}" xmlns="http://www.w3.org/2000/svg">
     ${buildDefs(app, cols)}
 
     ${vis.showStrings ? strSlotMap.map((str, si) =>
-      str ? drawStringLine(si, r, cols.solar, app) : ''
+      str ? drawStringLine(si, rn, cols.solar, app) : ''
     ).join('') : ''}
     ${vis.showStrings ? strSlotMap.map((str, si) =>
-      str ? drawStringBox(si, str.name || `Str ${si+1}`, `efc-sv-str${si}`, app, {
-        stroke: cols.solar.stroke, fill: '#1a1200'
-      }) : ''
+      !str ? '' : modern
+        ? drawChipModern(`efc-str-${si}`, STR_SLOT_X[si], STR_Y, STR_BOX_W, str.name || `Stringa ${si+1}`, `efc-sv-str${si}`, cols.solar.stroke, app, 1)
+        : drawStringBox(si, str.name || `Str ${si+1}`, `efc-sv-str${si}`, app, {
+            stroke: cols.solar.stroke, fill: '#1a1200'
+          })
     ).join('') : ''}
 
+    ${modern ? `
+    ${vis.showBattery ? drawConnectorModern(this._paths.pathSolarBattery) : ''}
+    ${drawConnectorModern(this._paths.pathSolarHome)}
+    ${vis.showGrid    ? drawConnectorModern(this._paths.pathSolarGrid) : ''}
+    ${vis.showBattery ? drawConnectorModern(this._paths.pathBatteryHome) : ''}
+    ${vis.showGrid    ? drawConnectorModern(this._paths.pathGridHome) : ''}
+    ` : `
     ${drawConnector(pathSolarBattery, cols.solar.stroke,   app)}
     ${drawConnector(pathSolarHome,    cols.solar.stroke,   app)}
     ${vis.showGrid    ? drawConnector(pathSolarGrid,   cols.solar.stroke,   app) : ''}
     ${vis.showBattery ? drawConnector(pathBatteryHome, cols.battery.stroke, app) : ''}
     ${vis.showGrid    ? drawConnector(pathGridHome,    cols.grid.stroke,    app) : ''}
+    `}
 
     ${vis.showLoads ? loadSlotMap.map((load, li) =>
-      load ? drawLoadLine(li, load.color || '#26C6DA', true, r, app) : ''
+      load ? drawLoadLine(li, load.color || '#26C6DA', true, rn, app) : ''
     ).join('') : ''}
 
     <g id="efc-dots"></g>
 
+    ${modern ? `
+    ${drawMainNodeModern('solar', POS.solar, cols.solar, 'SOLARE', 'efc-v-solar1', 'efc-v-solar2', app)}
+    ${vis.showBattery ? drawMainNodeModern('battery', POS.battery, cols.battery, 'BATTERIA', 'efc-v-battery1', 'efc-v-battery2', app) : ''}
+    ${vis.showGrid ? drawMainNodeModern('grid', POS.grid, cols.grid, 'RETE', 'efc-v-grid1', 'efc-v-grid2', app) : ''}
+    ${drawMainNodeModern('home', POS.home, cols.home, 'CASA', 'efc-v-home1', 'efc-v-home2', app)}
+    ` : `
     ${drawMainNode('solar', POS.solar, r, cols.solar, 'efc-gs', '☀ Solare', 'efc-v-solar1', 'efc-v-solar2', app)}
 
     ${vis.showBattery ? drawMainNode('battery', POS.battery, r, cols.battery, 'efc-gb', '🔋 Batteria', 'efc-v-battery1', 'efc-v-battery2', app) : ''}
@@ -393,12 +584,30 @@ ${buildCSS(app)}
     ${vis.showGrid ? drawMainNode('grid', POS.grid, r, cols.grid, 'efc-gg', '⚡ Rete', 'efc-v-grid1', 'efc-v-grid2', app) : ''}
 
     ${drawMainNode('home', POS.home, r, cols.home, 'efc-gh', '🏠 Casa', 'efc-v-home1', 'efc-v-home2', app)}
+    `}
 
     ${vis.showLoads ? loadSlotMap.map((load, li) =>
-      load ? drawLoadBox(li, load.name || `CR${li+1}`, load.color, `efc-v-load${li}`, true, app, { stroke: '#26C6DA', fill: '#001a1a' }) : ''
+      !load ? '' : modern
+        ? drawChipModern(`efc-load-${li}`, LOAD_SLOT_X[li], LOAD_Y, LOAD_BOX_W, load.name || `CR${li+1}`, `efc-v-load${li}`, load.color || '#26C6DA', app, 0.55)
+        : drawLoadBox(li, load.name || `CR${li+1}`, load.color, `efc-v-load${li}`, true, app, { stroke: '#26C6DA', fill: '#001a1a' })
     ).join('') : ''}
 
-    ${vis.showHistoryBtn ? `
+    ${this._statsOn ? `
+    <text id="efc-stats" x="${VB.w / 2}" y="${vbH - 74}" text-anchor="middle" font-size="15" font-weight="600" class="efc-sub"></text>` : ''}
+
+    ${vis.showHistoryBtn && modern ? `
+    <g class="efc-mode-btn" onclick="this.getRootNode().host._toggleMode()"
+      transform="translate(${(VB.w - 220) / 2}, ${btnY})">
+      <rect x="0" y="0" width="220" height="40" rx="20" class="efc-seg-track"/>
+      <rect id="efc-seg-hl" class="efc-seg-hl" x="3" y="3" width="104" height="34" rx="17"
+        style="transform:translateX(${this._mode === 'realtime' ? 0 : 107}px)"/>
+      <text id="efc-seg-t1" x="55" y="21" text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="600"
+        class="${this._mode === 'realtime' ? 'efc-txt' : 'efc-sub'}">Realtime</text>
+      <text id="efc-seg-t2" x="162" y="21" text-anchor="middle" dominant-baseline="middle" font-size="15" font-weight="600"
+        class="${this._mode === 'realtime' ? 'efc-sub' : 'efc-txt'}">Storico</text>
+    </g>` : ''}
+
+    ${vis.showHistoryBtn && !modern ? `
     <g class="efc-mode-btn" onclick="this.getRootNode().host._toggleMode()"
       transform="translate(${(VB.w - 180) / 2}, ${btnY})">
       <rect x="0" y="0" width="180" height="44" rx="22" fill="${btnFill}" opacity="0.95"/>
@@ -408,6 +617,20 @@ ${buildCSS(app)}
 
   </svg>
 </ha-card>`;
+
+    // Entita' aperta (more-info) al tocco di ogni nodo
+    const ent = {
+      'efc-nd-solar'  : cfg.solar?.entity_power,
+      'efc-nd-battery': cfg.battery?.entity_soc || cfg.battery?.entity_power,
+      'efc-nd-grid'   : cfg.grid?.entity_import,
+      'efc-nd-home'   : cfg.home?.entity_power,
+    };
+    strings.forEach((str, i) => { ent[`efc-str-${STR_SLOTS[i]}`] = str.entity_power; });
+    loads.forEach((load, i) => { ent[`efc-load-${LOAD_SLOTS[i]}`] = load.entity_power; });
+    Object.entries(ent).forEach(([id, entityId]) => {
+      const el = this.shadowRoot.getElementById(id);
+      if (el && entityId) el.dataset.entity = entityId;
+    });
 
     this.shadowRoot.querySelectorAll('.efc-node').forEach(el => {
       el.addEventListener('click', () => {
@@ -434,14 +657,18 @@ ${buildCSS(app)}
     const gW  = (id, unit) => getW(hass, id, unit);
     const gR  = (id)       => getRaw(hass, id);
     const thr = app.flowThreshold;
+    const M   = app.modern;
+    const dim = M ? 0.55 : app.lineOpacityInactive;   // opacità dei nodi spenti
+    const val = (t) => (M ? mv(t) : t);
 
     // SOLARE
     const solarW = mode === 'realtime'
       ? gW(cfg.solar?.entity_power, cfg.solar?.unit)
       : gR(cfg.solar?.entity_energy);
     const solarActive = isActiveValue(solarW, thr, mode);
-    this._t('efc-v-solar1', mode === 'realtime' ? fmtW(solarW) : fmtE(solarW), app.fontNodeValue);
-    this._setOpacity('efc-nd-solar', solarActive, app.lineOpacityInactive);
+    this._t('efc-v-solar1', val(mode === 'realtime' ? fmtW(solarW) : fmtE(solarW)), app.fontNodeValue);
+    if (M) this._t('efc-v-solar2', mode === 'realtime' ? (solarActive ? 'In produzione' : 'Inattivo') : 'Produzione di oggi');
+    this._setOpacity('efc-nd-solar', solarActive, dim);
 
     // Stringhe
     if (vis.showStrings) {
@@ -451,9 +678,9 @@ ${buildCSS(app)}
           ? gW(str.entity_power, str.unit)
           : gR(str.entity_energy);
         const on = isActiveValue(v, thr, mode);
-        this._t(`efc-sv-str${si}`, mode === 'realtime' ? fmtW(v) : fmtE(v));
+        this._t(`efc-sv-str${si}`, val(mode === 'realtime' ? fmtW(v) : fmtE(v)));
         const box  = this.shadowRoot.getElementById(`efc-str-${si}`);
-        if (box) box.style.opacity = on ? '1' : '0.35';
+        if (box) box.style.opacity = on ? '1' : (M ? '0.55' : '0.35');
         const line = this.shadowRoot.getElementById(`efc-strline-${si}`);
         if (line) line.classList.toggle('efc-da', on);
       });
@@ -468,11 +695,24 @@ ${buildCSS(app)}
       const valIn  = mode === 'realtime' ? fmtW(gridIn)  : fmtE(gridIn);
       const valOut = mode === 'realtime' ? fmtW(gridOut) : fmtE(gridOut);
 
-      this._t('efc-v-grid1', `<tspan font-size="0.65em">→ </tspan>${valIn}`, app.fontNodeValue);
-      this._t('efc-v-grid2', `<tspan font-size="0.65em">← </tspan>${valOut}`, app.fontNodeSecondary);
+      if (M) {
+        let main, st;
+        if (mode === 'realtime') {
+          if (gridIn > thr)       { main = valIn;  st = 'Preleva dalla rete'; }
+          else if (gridOut > thr) { main = valOut; st = 'Immette in rete'; }
+          else                    { main = fmtW(0); st = 'Nessuno scambio'; }
+        } else {
+          main = valIn; st = `${valOut} immessi`;
+        }
+        this._t('efc-v-grid1', mv(main), app.fontNodeValue);
+        this._t('efc-v-grid2', st);
+      } else {
+        this._t('efc-v-grid1', `<tspan font-size="0.65em">→ </tspan>${valIn}`, app.fontNodeValue);
+        this._t('efc-v-grid2', `<tspan font-size="0.65em">← </tspan>${valOut}`, app.fontNodeSecondary);
+      }
 
       const gridActive = isActiveValue(gridIn, thr, mode) || isActiveValue(gridOut, thr, mode);
-      this._setOpacity('efc-nd-grid', gridActive, app.lineOpacityInactive);
+      this._setOpacity('efc-nd-grid', gridActive, dim);
     }
 
     // BATTERIA
@@ -483,7 +723,8 @@ ${buildCSS(app)}
       batW = batC || 0;
       if (batD !== null && batD !== undefined) batW = (batC || 0) - (batD || 0);
 
-      if (mode === 'realtime') {
+      if (M) this._updateBatteryModern(mode, batW, thr, gR);
+      else if (mode === 'realtime') {
         const batSoc = gR(cfg.battery?.entity_soc);
         const socStr = batSoc !== null ? `${Math.round(batSoc)} %` : '—';
         this._t('efc-v-battery1', socStr, app.fontNodeValue);
@@ -495,7 +736,7 @@ ${buildCSS(app)}
           batSecStr = `<tspan font-size="1.0em">↓ </tspan>${fmtW(Math.abs(batW))}`;
         }
         this._t('efc-v-battery2', batSecStr, app.fontNodeSecondary + 4);
-      } else {
+      } else if (!M) {
         const batEIn  = gR(cfg.battery?.entity_energy_in);
         const batEOut = gR(cfg.battery?.entity_energy_out);
         this._t('efc-v-battery1', fmtE(batEIn), app.fontNodeValue);
@@ -503,20 +744,29 @@ ${buildCSS(app)}
         // In storico usa valori energia per opacità
         const batHistActive = (batEIn !== null && !isNaN(batEIn) && batEIn > 0) ||
                               (batEOut !== null && !isNaN(batEOut) && batEOut > 0);
-        this._setOpacity('efc-nd-battery', batHistActive, app.lineOpacityInactive);
+        this._setOpacity('efc-nd-battery', batHistActive, dim);
       }
 
-      if (mode === 'realtime') {
+      if (mode === 'realtime' || M) {
         // In realtime la batteria è sempre visibile
-        this._setOpacity('efc-nd-battery', true, app.lineOpacityInactive);
+        this._setOpacity('efc-nd-battery', true, dim);
       }
     }
 
     // CASA
     const homeW = mode === 'realtime' ? gW(cfg.home?.entity_power) : gR(cfg.home?.entity_energy);
     const homeActive = isActiveValue(homeW, thr, mode);
-    this._t('efc-v-home1', mode === 'realtime' ? fmtW(homeW) : fmtE(homeW), app.fontNodeValue);
-    this._setOpacity('efc-nd-home', homeActive, app.lineOpacityInactive);
+    this._t('efc-v-home1', val(mode === 'realtime' ? fmtW(homeW) : fmtE(homeW)), app.fontNodeValue);
+    if (M) {
+      let src = 'Consumo';
+      if (mode !== 'realtime') src = 'Consumo di oggi';
+      else if (gridIn > thr && solarActive) src = 'Solare + rete';
+      else if (gridIn > thr)               src = 'Dalla rete';
+      else if (solarActive)                src = 'Dal solare';
+      else if (batW < -thr)                src = 'Dalla batteria';
+      this._t('efc-v-home2', src);
+    }
+    this._setOpacity('efc-nd-home', homeActive, dim);
 
     // Carichi
     if (vis.showLoads) {
@@ -524,9 +774,9 @@ ${buildCSS(app)}
         const li = LOAD_SLOTS[i];
         const v  = mode === 'realtime' ? gW(load.entity_power) : gR(load.entity_energy);
         const on = isActiveValue(v, thr, mode);
-        this._t(`efc-v-load${li}`, mode === 'realtime' ? fmtW(v) : fmtE(v));
+        this._t(`efc-v-load${li}`, val(mode === 'realtime' ? fmtW(v) : fmtE(v)));
         const box  = this.shadowRoot.getElementById(`efc-load-${li}`);
-        if (box) box.style.opacity = on ? '1' : '0.3';
+        if (box) box.style.opacity = on ? '1' : (M ? '0.55' : '0.3');
         const line = this.shadowRoot.getElementById(`efc-loadline-${li}`);
         if (line) {
           line.style.opacity = on ? '0.5' : String(app.lineOpacityInactive);
@@ -535,7 +785,56 @@ ${buildCSS(app)}
       });
     }
 
+    if (this._statsOn) this._updateStats(gR);
     this._updateDots({ solarW, gridIn, gridOut, batW });
+  }
+
+  // Batteria (stile moderno): % grande, anello di carica, potenza e freccia carica/scarica
+  _updateBatteryModern(mode, batW, thr, gR) {
+    const cfg = this._cfg;
+    const soc = gR(cfg.battery?.entity_soc);
+    const hasSoc = soc !== null && !isNaN(soc);
+    const ring = this.shadowRoot.getElementById('efc-ring-battery');
+    if (ring) {
+      const circ = parseFloat(ring.dataset.circ);
+      const f = hasSoc ? clamp(soc, 0, 100) / 100 : 0;
+      ring.setAttribute('stroke-dasharray', `${(circ * f).toFixed(1)} ${circ.toFixed(1)}`);
+    }
+    const up   = this.shadowRoot.getElementById('efc-badge-up');
+    const down = this.shadowRoot.getElementById('efc-badge-down');
+    const charging = mode === 'realtime' && batW > thr;
+    const discharging = mode === 'realtime' && batW < -thr;
+    if (up)   up.style.display   = charging ? '' : 'none';
+    if (down) down.style.display = discharging ? '' : 'none';
+
+    if (mode === 'realtime') {
+      this._t('efc-v-battery1', mv(hasSoc ? `${Math.round(soc)}%` : '—'), this._app.fontNodeValue);
+      let st = 'In standby';
+      if (charging)         st = `${fmtW(batW)} in carica`;
+      else if (discharging) st = `${fmtW(-batW)} in scarica`;
+      this._t('efc-v-battery2', st);
+    } else {
+      const eIn  = gR(cfg.battery?.entity_energy_in);
+      const eOut = gR(cfg.battery?.entity_energy_out);
+      this._t('efc-v-battery1', mv(fmtE(eIn)), this._app.fontNodeValue);
+      this._t('efc-v-battery2', `${fmtE(eOut)} scaricati`);
+      const active = (eIn > 0) || (eOut > 0);
+      this._setOpacity('efc-nd-battery', active, 0.55);
+    }
+  }
+
+  // Riga autoconsumo / autosufficienza del giorno
+  _updateStats(gR) {
+    const cfg = this._cfg;
+    const ok  = (v) => v !== null && v !== undefined && !isNaN(v);
+    const pct = (f) => `${Math.round(clamp(f, 0, 1) * 100)}%`;
+    const sE = gR(cfg.solar?.entity_energy), ex = gR(cfg.grid?.entity_export_energy);
+    const im = gR(cfg.grid?.entity_import_energy), hE = gR(cfg.home?.entity_energy);
+    const parts = [];
+    if (ok(sE) && sE > 0 && ok(ex)) parts.push(`Autoconsumo ${pct((sE - ex) / sE)}`);
+    if (ok(hE) && hE > 0 && ok(im)) parts.push(`Autosufficienza ${pct(1 - im / hE)}`);
+    const el = this.shadowRoot.getElementById('efc-stats');
+    if (el) el.textContent = parts.join('   ·   ');
   }
 
   _t(id, val, baseSize = null) {
@@ -594,6 +893,20 @@ ${buildCSS(app)}
 
     let html = '';
 
+    if (app.modern) {
+      // Solare -> casa: quanto il solare non manda a batteria e rete
+      const toBat  = vis.showBattery && batW > thr ? batW : 0;
+      const toGrid = vis.showGrid && gridOut > thr * 2 ? gridOut : 0;
+      const toHome = isActive(solarW, thr) ? Math.max(solarW - toBat - toGrid, 0) : 0;
+      html += flowLineModern(p.pathSolarHome, cols.solar.stroke, toHome, app);
+      if (isActive(solarW, thr) && toBat)  html += flowLineModern(p.pathSolarBattery, cols.solar.stroke, toBat, app);
+      if (isActive(solarW, thr) && toGrid) html += flowLineModern(p.pathSolarGrid, cols.solar.stroke, toGrid, app);
+      if (isActive(gridIn, thr) && vis.showGrid)  html += flowLineModern(p.pathGridHome, cols.grid.stroke, gridIn, app);
+      if (batW < -thr && vis.showBattery)         html += flowLineModern(p.pathBatteryHome, cols.battery.stroke, -batW, app);
+      g.innerHTML = html;
+      return;
+    }
+
     if (isActive(solarW, thr))
       html += makeDots(p.pathSolarHome, cols.solar.stroke, solarW, app);
 
@@ -622,6 +935,12 @@ ${buildCSS(app)}
 
   _setMode(mode) {
     this._mode = mode;
+    const hl = this.shadowRoot.getElementById('efc-seg-hl');
+    if (hl) {
+      hl.style.transform = `translateX(${mode === 'realtime' ? 0 : 107}px)`;
+      this.shadowRoot.getElementById('efc-seg-t1')?.setAttribute('class', mode === 'realtime' ? 'efc-txt' : 'efc-sub');
+      this.shadowRoot.getElementById('efc-seg-t2')?.setAttribute('class', mode === 'realtime' ? 'efc-sub' : 'efc-txt');
+    }
     const btn = this.shadowRoot.getElementById('efc-btn-label');
     if (btn) {
       btn.textContent = mode === 'realtime' ? '⚡ Realtime' : '📊 Storico';
@@ -944,6 +1263,7 @@ class EnergyFlowCardEditor extends LitElement {
         `)}
 
         ${this._section('appearance', '🎨', 'Aspetto', html`
+          ${this._toggle('Stile classico (neon, nodi tondi)', 'appearance.classic', false)}
           <div class="sec-sub">Dimensioni nodi</div>
           ${this._slider('Raggio nodi',    'appearance.node_radius', 40, 120, 1, 77, 'px')}
           ${this._slider('Pallini flusso', 'appearance.dot_size',    2,  12,  1, 6,  'px')}
@@ -1000,6 +1320,7 @@ class EnergyFlowCardEditor extends LitElement {
           ${this._toggle('Mostra stringhe solari',  'display.show_strings',        true)}
           ${this._toggle('Mostra carichi casa',     'display.show_loads',          true)}
           ${this._toggle('Mostra bottone Storico',  'display.show_history_button', true)}
+          ${this._toggle('Mostra autoconsumo e autosufficienza', 'display.show_self_consumption', true)}
         `)}
 
       </div>`;
